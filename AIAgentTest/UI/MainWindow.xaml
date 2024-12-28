@@ -7,82 +7,142 @@
         mc:Ignorable="d"
         Title="AI Agent Framework" Height="800" Width="1500">
 
-	<Grid Margin="10">
-		<Grid.RowDefinitions>
-			<RowDefinition Height="Auto"/>
-			<RowDefinition Height="Auto"/>
-			<RowDefinition Height="*"/>
-		</Grid.RowDefinitions>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Window.Resources>
 
-		<!-- Top Controls -->
-		<StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
-			<ComboBox x:Name="ModelComboBox" Width="200"
-                      ItemsSource="{Binding AvailableModels}"
-                      SelectedItem="{Binding SelectedModel}"
-                      Margin="0,0,10,0"/>
-			<TextBox x:Name="InputTextBox" Width="1260"
-                     Height="30"
-                     Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
-                     KeyDown="InputTextBox_KeyDown"/>
-		</StackPanel>
+    <DockPanel>
+        <!-- Menu Bar -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Save Conversation..." Click="SaveConversation_Click"/>
+                <MenuItem Header="_Export Code..." Click="ExportCode_Click"/>
+                <Separator/>
+                <MenuItem Header="_Exit" Click="Exit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="Show _Debug Window" 
+                          IsCheckable="True" 
+                          IsChecked="{Binding IsDebugVisible}"
+                          Click="ToggleDebugWindow_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Model">
+                <MenuItem Header="_Refresh Models" Click="RefreshModels_Click"/>
+                <MenuItem Header="_Model Settings..." Click="ModelSettings_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="_About..." Click="About_Click"/>
+            </MenuItem>
+        </Menu>
 
-		<!-- Headers -->
-		<Grid Grid.Row="1" Margin="0,0,0,5">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*"/>
-				<ColumnDefinition Width="*"/>
-				<ColumnDefinition Width="*"/>
-			</Grid.ColumnDefinitions>
-			<TextBlock Grid.Column="0" Text="Conversation" FontWeight="Bold"/>
-			<TextBlock Grid.Column="1" Text="Code View" FontWeight="Bold" Margin="5,0"/>
-			<TextBlock Grid.Column="2" Text="Debug Output" FontWeight="Bold"/>
-		</Grid>
+        <!-- Main Content -->
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-		<!-- Main Content Area -->
-		<Grid Grid.Row="2">
-			<Grid.ColumnDefinitions>
-				<ColumnDefinition Width="*"/>
-				<ColumnDefinition Width="*"/>
-				<ColumnDefinition Width="*"/>
-			</Grid.ColumnDefinitions>
+            <!-- Headers -->
+            <Grid Grid.Row="0" Margin="0,0,0,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition x:Name="DebugColumnDefinition">
+                        <ColumnDefinition.Style>
+                            <Style TargetType="ColumnDefinition">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDebugVisible}" Value="False">
+                                        <Setter Property="Width" Value="0"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsDebugVisible}" Value="True">
+                                        <Setter Property="Width" Value="2*"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ColumnDefinition.Style>
+                    </ColumnDefinition>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Conversation" FontWeight="Bold"/>
+                <TextBlock Grid.Column="1" Text="Code View" FontWeight="Bold" Margin="5,0"/>
+                <TextBlock Grid.Column="2" Text="Debug Output" FontWeight="Bold" 
+                           Visibility="{Binding IsDebugVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            </Grid>
 
-			<!-- Conversation Panel -->
-			<RichTextBox Grid.Column="0"
-                         x:Name="ConversationBox"
-                         IsReadOnly="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Margin="0,0,5,0">
-				<RichTextBox.Resources>
-					<Style TargetType="Hyperlink">
-						<Style.Triggers>
-							<Trigger Property="IsMouseOver" Value="True">
-								<Setter Property="Cursor" Value="Hand"/>
-							</Trigger>
-						</Style.Triggers>
-					</Style>
-				</RichTextBox.Resources>
-				<FlowDocument/>
-			</RichTextBox>
+            <!-- Main Content Area -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition x:Name="DebugColumn">
+                        <ColumnDefinition.Style>
+                            <Style TargetType="ColumnDefinition">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDebugVisible}" Value="False">
+                                        <Setter Property="Width" Value="0"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsDebugVisible}" Value="True">
+                                        <Setter Property="Width" Value="2*"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ColumnDefinition.Style>
+                    </ColumnDefinition>
+                </Grid.ColumnDefinitions>
 
-			<!-- Code Panel -->
-			<RichTextBox Grid.Column="1"
-                         x:Name="CodeBox"
-                         IsReadOnly="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Margin="5,0"
-                         FontFamily="Consolas">
-				<FlowDocument/>
-			</RichTextBox>
+                <!-- Conversation Panel -->
+                <RichTextBox Grid.Column="0"
+                             x:Name="ConversationBox"
+                             IsReadOnly="True"
+                             VerticalScrollBarVisibility="Auto"
+                             Margin="0,0,5,0">
+                    <RichTextBox.Resources>
+                        <Style TargetType="Hyperlink">
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </RichTextBox.Resources>
+                    <FlowDocument/>
+                </RichTextBox>
 
-			<!-- Debug Panel -->
-			<RichTextBox Grid.Column="2"
-                         x:Name="DebugBox"
-                         IsReadOnly="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Margin="5,0,0,0"
-                         FontFamily="Consolas">
-				<FlowDocument/>
-			</RichTextBox>
-		</Grid>
-	</Grid>
+                <!-- Code Panel -->
+                <RichTextBox Grid.Column="1"
+                             x:Name="CodeBox"
+                             IsReadOnly="True"
+                             VerticalScrollBarVisibility="Auto"
+                             Margin="5,0"
+                             FontFamily="Consolas">
+                    <FlowDocument/>
+                </RichTextBox>
+
+                <!-- Debug Panel -->
+                <RichTextBox Grid.Column="2"
+                             x:Name="DebugBox"
+                             IsReadOnly="True"
+                             VerticalScrollBarVisibility="Auto"
+                             Margin="5,0,0,0"
+                             FontFamily="Consolas"
+                             Visibility="{Binding IsDebugVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <FlowDocument/>
+                </RichTextBox>
+            </Grid>
+
+            <!-- Bottom Controls -->
+            <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="True">
+                <ComboBox x:Name="ModelComboBox" 
+                          DockPanel.Dock="Left"
+                          Width="200"
+                          Margin="0,0,10,0"
+                          ItemsSource="{Binding AvailableModels}"
+                          SelectedItem="{Binding SelectedModel}"/>
+                <TextBox x:Name="InputTextBox"
+                         Height="30"
+                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+                         KeyDown="InputTextBox_KeyDown"/>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
 </Window>

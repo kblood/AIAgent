@@ -22,6 +22,7 @@
   <Compile Remove="UI\Converters.cs" />
   <Compile Remove="UI\DocumentModel.cs" />
   <Compile Remove="UI\MainForm.cs" />
+  <Compile Remove="UI\MainViewModel.cs" />
   <Compile Remove="UI\ModelManagementWindow.xaml.cs" />
 </ItemGroup>
 

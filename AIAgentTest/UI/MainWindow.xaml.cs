@@ -8,6 +8,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Text.RegularExpressions;
 using AIAgentTest.API_Clients;
+using Microsoft.Win32;
+using System.IO;
 
 namespace AIAgentTest.UI
 {
@@ -17,8 +19,19 @@ namespace AIAgentTest.UI
         private ObservableCollection<string> _availableModels;
         private string _selectedModel;
         private string _inputText;
+        private bool _isDebugVisible = true;
 
         public event PropertyChangedEventHandler PropertyChanged;
+
+        public bool IsDebugVisible
+        {
+            get => _isDebugVisible;
+            set
+            {
+                _isDebugVisible = value;
+                OnPropertyChanged(nameof(IsDebugVisible));
+            }
+        }
 
         public ObservableCollection<string> AvailableModels
         {
@@ -58,7 +71,6 @@ namespace AIAgentTest.UI
             _ollamaClient = new OllamaClient();
             AvailableModels = new ObservableCollection<string>();
 
-            // Initialize FlowDocument with minimal spacing
             ConversationBox.Document = new FlowDocument()
             {
                 PagePadding = new Thickness(0),
@@ -67,16 +79,30 @@ namespace AIAgentTest.UI
 
             LoadModelsAsync();
 
-            // Ensure the CodeBox and ConversationBox are scrolled to the bottom when content changes
             CodeBox.TextChanged += (s, e) => CodeBox.ScrollToEnd();
             ConversationBox.TextChanged += (s, e) => ConversationBox.ScrollToEnd();
         }
 
-        private async void LoadModelsAsync()
+        private void UpdateDebugColumnWidth()
+        {
+            if (IsDebugVisible)
+            {
+                DebugColumn.Width = new GridLength(1, GridUnitType.Star);
+                DebugColumnDefinition.Width = new GridLength(1, GridUnitType.Star);
+            }
+            else
+            {
+                DebugColumn.Width = new GridLength(0);
+                DebugColumnDefinition.Width = new GridLength(0);
+            }
+        }
+
+        private async Task LoadModelsAsync()
         {
             try
             {
                 var models = await _ollamaClient.GetAvailableModelsAsync();
+                AvailableModels.Clear();
                 foreach (var model in models)
                 {
                     AvailableModels.Add(model.Name);
@@ -109,19 +135,12 @@ namespace AIAgentTest.UI
 
             try
             {
-                // Add user input to conversation
                 AppendToConversation("User: " + InputText + "\n", null);
 
-                // Get AI response
                 string response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
-
-                // Show raw response in debug
                 SetRichTextContent(DebugBox, response);
-
-                // Process and display the response
                 ProcessAndDisplayResponse(response);
 
-                // Clear input
                 InputText = string.Empty;
             }
             catch (Exception ex)
@@ -132,7 +151,8 @@ namespace AIAgentTest.UI
 
         private void ProcessAndDisplayResponse(string response)
         {
-            AppendToConversation("Assistant: ", null);
+            AppendToConversation($"{SelectedModel}: ", null);
+            //AppendToConversation("Assistant: ", null);
 
             string pattern = @"```(\w*)\r?\n(.*?)\r?\n```|```(\w*)\s*(.*?)```";
             int lastIndex = 0;
@@ -141,27 +161,21 @@ namespace AIAgentTest.UI
 
             foreach (Match match in matches)
             {
-                // Add text before code block
                 string textBefore = response.Substring(lastIndex, match.Index - lastIndex);
                 if (!string.IsNullOrWhiteSpace(textBefore))
                 {
                     AppendToConversation(textBefore, null);
                 }
 
-                // Get language and code
                 string language = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[3].Value;
                 string code = match.Groups[2].Success ? match.Groups[2].Value : match.Groups[4].Value;
 
-                // Store the code in CodeBox immediately
                 SetRichTextContent(CodeBox, code);
-
-                // Add clickable link to conversation
                 AddCodeLink(language, code.Trim());
 
                 lastIndex = match.Index + match.Length;
             }
 
-            // Add remaining text
             string remaining = response.Substring(lastIndex);
             if (!string.IsNullOrWhiteSpace(remaining))
             {
@@ -188,122 +202,55 @@ namespace AIAgentTest.UI
 
         private void AddCodeLink(string language, string code)
         {
-            AppendToDebug($"Creating code link for {language} code");
-
-            try
+            var paragraph = new Paragraph();
+            var link = new Hyperlink(new Run($"[View {language} Code]"))
             {
-                // Create the link paragraph
-                var paragraph = new Paragraph();
-                var link = new Hyperlink(new Run($"[View {language} Code]"))
-                {
-                    Foreground = Brushes.Blue,
-                    TextDecorations = TextDecorations.Underline,
-                    Cursor = Cursors.Hand
-                };
+                Foreground = Brushes.Blue,
+                TextDecorations = TextDecorations.Underline,
+                Cursor = Cursors.Hand
+            };
 
-                // Store the code as a Tag on the link for easy access
-                link.Tag = code;
-                AppendToDebug($"Code stored in link.Tag, length: {code.Length}");
+            link.Tag = code;
+            link.Click += CodeLink_Click;
+            link.MouseLeftButtonDown += (s, e) => CodeLink_Click(link, new RoutedEventArgs());
 
-                // Handle the click event
-                link.Click += CodeLink_Click;
-
-                // Add a MouseLeftButtonDown handler as backup
-                link.MouseLeftButtonDown += (s, e) =>
-                {
-                    AppendToDebug("Link clicked via MouseLeftButtonDown");
-                    CodeLink_Click(link, new RoutedEventArgs());
-                };
-
-                paragraph.Inlines.Add(link);
-                ConversationBox.Document.Blocks.Add(paragraph);
-                ConversationBox.ScrollToEnd();
-
-                AppendToDebug("Code link created successfully");
-            }
-            catch (Exception ex)
-            {
-                AppendToDebug($"Error creating code link: {ex.Message}");
-            }
+            paragraph.Inlines.Add(link);
+            ConversationBox.Document.Blocks.Add(paragraph);
+            ConversationBox.ScrollToEnd();
         }
 
         private void CodeLink_Click(object sender, RoutedEventArgs e)
         {
-            // Debug output to DebugBox
-            AppendToDebug("CodeLink_Click triggered");
-
-            if (sender is Hyperlink link)
+            if (sender is Hyperlink link && link.Tag is string code)
             {
-                AppendToDebug($"Link found: {link.Tag != null}");
-
-                if (link.Tag is string code)
+                Dispatcher.Invoke(() =>
                 {
-                    AppendToDebug($"Code content length: {code.Length}");
-                    AppendToDebug("Code content preview: " + code.Substring(0, Math.Min(50, code.Length)));
-
-                    try
+                    var document = new FlowDocument();
+                    var paragraph = new Paragraph(new Run(code))
                     {
-                        Dispatcher.Invoke(() =>
-                        {
-                            AppendToDebug("Creating new FlowDocument");
-                            var document = new FlowDocument();
+                        FontFamily = new FontFamily("Consolas"),
+                        LineHeight = 1.0
+                    };
+                    document.Blocks.Add(paragraph);
+                    CodeBox.Document = document;
 
-                            AppendToDebug("Creating code paragraph");
-                            var paragraph = new Paragraph(new Run(code))
-                            {
-                                FontFamily = new FontFamily("Consolas"),
-                                LineHeight = 1.0
-                            };
-                            document.Blocks.Add(paragraph);
+                    var originalBackground = CodeBox.Background;
+                    CodeBox.Background = Brushes.LightYellow;
 
-                            AppendToDebug("Updating CodeBox document");
-                            CodeBox.Document = document;
-
-                            AppendToDebug("Setting background color");
-                            var originalBackground = CodeBox.Background;
-                            CodeBox.Background = Brushes.LightYellow;
-
-                            var timer = new System.Windows.Threading.DispatcherTimer
-                            {
-                                Interval = TimeSpan.FromMilliseconds(500)
-                            };
-                            timer.Tick += (s, args) =>
-                            {
-                                CodeBox.Background = originalBackground;
-                                timer.Stop();
-                            };
-                            timer.Start();
-
-                            CodeBox.ScrollToEnd();
-                            AppendToDebug("CodeBox update complete");
-                        });
-                    }
-                    catch (Exception ex)
+                    var timer = new System.Windows.Threading.DispatcherTimer
                     {
-                        AppendToDebug($"Error updating code window: {ex.Message}");
-                    }
-                }
-                else
-                {
-                    AppendToDebug("Link.Tag was not a string");
-                }
-            }
-            else
-            {
-                AppendToDebug("Sender was not a Hyperlink");
-            }
-        }
+                        Interval = TimeSpan.FromMilliseconds(500)
+                    };
+                    timer.Tick += (s, args) =>
+                    {
+                        CodeBox.Background = originalBackground;
+                        timer.Stop();
+                    };
+                    timer.Start();
 
-        private void AppendToDebug(string message)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                var document = new FlowDocument();
-                var paragraph = new Paragraph(new Run(message));
-                document.Blocks.Add(paragraph);
-                DebugBox.Document = document;
-                DebugBox.ScrollToEnd();
-            });
+                    CodeBox.ScrollToEnd();
+                });
+            }
         }
 
         private void SetRichTextContent(RichTextBox box, string content)
@@ -313,6 +260,67 @@ namespace AIAgentTest.UI
             document.Blocks.Add(new Paragraph(new Run(content)));
             box.Document = document;
             box.ScrollToEnd();
+        }
+
+        // Menu Event Handlers
+        private void SaveConversation_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                DefaultExt = ".txt"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                TextRange range = new TextRange(ConversationBox.Document.ContentStart,
+                                              ConversationBox.Document.ContentEnd);
+                File.WriteAllText(dialog.FileName, range.Text);
+            }
+        }
+
+        private void ExportCode_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                DefaultExt = ".txt"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                TextRange range = new TextRange(CodeBox.Document.ContentStart,
+                                              CodeBox.Document.ContentEnd);
+                File.WriteAllText(dialog.FileName, range.Text);
+            }
+        }
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
+
+        private void ToggleDebugWindow_Click(object sender, RoutedEventArgs e)
+        {
+            var visible = IsDebugVisible;
+            //IsDebugVisible = !visible;
+        }
+
+        private async void RefreshModels_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadModelsAsync();
+        }
+
+        private void ModelSettings_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("Model settings dialog not implemented yet.", "Model Settings",
+                          MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void About_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("AI Agent Framework\nVersion 1.0\n\nA user interface for interacting with local AI models.",
+                          "About", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         protected virtual void OnPropertyChanged(string propertyName)
