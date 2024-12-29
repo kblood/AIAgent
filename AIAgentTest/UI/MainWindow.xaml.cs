@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Text.RegularExpressions;
 using AIAgentTest.API_Clients;
+using AIAgentTest.Services;
 using Microsoft.Win32;
 using System.IO;
 
@@ -16,10 +17,12 @@ namespace AIAgentTest.UI
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         private readonly OllamaClient _ollamaClient;
+        private readonly ContextManager _contextManager;
         private ObservableCollection<string> _availableModels;
         private string _selectedModel;
         private string _inputText;
         private bool _isDebugVisible = true;
+        private bool _isContextEnabled = true;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -30,6 +33,17 @@ namespace AIAgentTest.UI
             {
                 _isDebugVisible = value;
                 OnPropertyChanged(nameof(IsDebugVisible));
+            }
+        }
+
+        public bool IsContextEnabled
+        {
+            get => _isContextEnabled;
+            set
+            {
+                _isContextEnabled = value;
+                _contextManager.IsContextEnabled = value;
+                OnPropertyChanged(nameof(IsContextEnabled));
             }
         }
 
@@ -69,6 +83,7 @@ namespace AIAgentTest.UI
             DataContext = this;
 
             _ollamaClient = new OllamaClient();
+            _contextManager = new ContextManager(_ollamaClient);
             AvailableModels = new ObservableCollection<string>();
 
             ConversationBox.Document = new FlowDocument()
@@ -136,10 +151,32 @@ namespace AIAgentTest.UI
             try
             {
                 AppendToConversation("User: " + InputText + "\n", null);
+                _contextManager.AddMessage("User", InputText);
 
-                string response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
-                SetRichTextContent(DebugBox, response);
+                string contextualPrompt = await _contextManager.GetContextualPrompt(InputText);
+                string response = await _ollamaClient.GenerateTextResponseAsync(contextualPrompt, SelectedModel);
+
+                // Add the response to context
+                _contextManager.AddMessage("Assistant", response);
+
+                // Update debug info
+                if (IsDebugVisible)
+                {
+                    string debugInfo = _contextManager.GetDebugInfo();
+                    SetRichTextContent(DebugBox, debugInfo + "\n\nRaw Response:\n" + response);
+                }
+                else
+                {
+                    SetRichTextContent(DebugBox, response);
+                }
+
                 ProcessAndDisplayResponse(response);
+
+                // Check if we should suggest summarization
+                if (await _contextManager.ShouldSummarize())
+                {
+                    AppendToConversation("\n[System: Context is getting long. Consider summarizing.]\n", null);
+                }
 
                 InputText = string.Empty;
             }
@@ -152,7 +189,6 @@ namespace AIAgentTest.UI
         private void ProcessAndDisplayResponse(string response)
         {
             AppendToConversation($"{SelectedModel}: ", null);
-            //AppendToConversation("Assistant: ", null);
 
             string pattern = @"```(\w*)\r?\n(.*?)\r?\n```|```(\w*)\s*(.*?)```";
             int lastIndex = 0;
@@ -302,8 +338,8 @@ namespace AIAgentTest.UI
 
         private void ToggleDebugWindow_Click(object sender, RoutedEventArgs e)
         {
-            var visible = IsDebugVisible;
-            //IsDebugVisible = !visible;
+            IsDebugVisible = !IsDebugVisible;
+            UpdateDebugColumnWidth();
         }
 
         private async void RefreshModels_Click(object sender, RoutedEventArgs e)
@@ -321,6 +357,60 @@ namespace AIAgentTest.UI
         {
             MessageBox.Show("AI Agent Framework\nVersion 1.0\n\nA user interface for interacting with local AI models.",
                           "About", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void ToggleContext_Click(object sender, RoutedEventArgs e)
+        {
+            IsContextEnabled = !IsContextEnabled;
+        }
+
+        private async void SummarizeContext_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var originalCursor = Mouse.OverrideCursor;
+                Mouse.OverrideCursor = Cursors.Wait;
+
+                AppendToConversation("\n[System: Summarizing context...]\n", null);
+                await _contextManager.SummarizeContext(SelectedModel);
+                AppendToConversation("[System: Context has been summarized.]\n", null);
+
+                if (IsDebugVisible)
+                {
+                    SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error summarizing context: {ex.Message}");
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+            }
+        }
+
+        private void ClearContext_Click(object sender, RoutedEventArgs e)
+        {
+            _contextManager.ClearContext();
+            AppendToConversation("\n[System: Context has been cleared.]\n", null);
+
+            if (IsDebugVisible)
+            {
+                SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
+            }
+        }
+
+        private void ShowCurrentContext_Click(object sender, RoutedEventArgs e)
+        {
+            if (!IsDebugVisible)
+            {
+                MessageBox.Show("Please enable the Debug Window to view the context.", "Debug Window Required");
+                return;
+            }
+
+            var fullContext = _contextManager.GetFullContext();
+            SetRichTextContent(DebugBox, fullContext);
         }
 
         protected virtual void OnPropertyChanged(string propertyName)

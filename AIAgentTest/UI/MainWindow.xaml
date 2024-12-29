@@ -29,6 +29,17 @@
             <MenuItem Header="_Model">
                 <MenuItem Header="_Refresh Models" Click="RefreshModels_Click"/>
                 <MenuItem Header="_Model Settings..." Click="ModelSettings_Click"/>
+                <Separator/>
+                <MenuItem Header="Enable Context" 
+                          IsCheckable="True" 
+                          IsChecked="{Binding IsContextEnabled}"
+                          Click="ToggleContext_Click"/>
+                <MenuItem Header="Summarize Context" 
+                          Click="SummarizeContext_Click"/>
+                <MenuItem Header="Clear Context"
+                          Click="ClearContext_Click"/>
+                <MenuItem Header="Show Current Context"
+                          Click="ShowCurrentContext_Click"/>
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_About..." Click="About_Click"/>
