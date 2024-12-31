@@ -12,6 +12,7 @@ using AIAgentTest.Services;
 using Microsoft.Win32;
 using System.IO;
 using System.Windows.Media.Imaging;
+using AIAgentTest.Models;
 
 namespace AIAgentTest.UI
 {
