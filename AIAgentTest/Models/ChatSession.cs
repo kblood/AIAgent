@@ -19,6 +19,7 @@ namespace AIAgentTest.Models
             }
         }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
         public List<ChatMessage> Messages { get; set; } = new List<ChatMessage>();
         public string ModelName { get; set; }
 

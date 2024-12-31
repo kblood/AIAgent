@@ -27,7 +27,7 @@ namespace AIAgentTest.UI
             set
             {
                 _currentSession = value;
-                OnPropertyChanged();
+                OnPropertyChanged(nameof(_currentSession));
             }
         }
         private readonly OllamaClient _ollamaClient;
@@ -380,9 +380,9 @@ namespace AIAgentTest.UI
             }
         }
 
-        private async void LoadSessionsAsync()
+        private async Task LoadSessionsAsync()
         {
-            var sessions = await _chatSessionService.ListSessionsAsync();
+            var sessions = await _chatSessionService.LoadSessionsAsync();
             ChatSessions.Clear();
             foreach (var session in sessions)
             {
@@ -513,4 +513,46 @@ namespace AIAgentTest.UI
                 AppendToConversation("[System: Context has been summarized.]\n", null);
 
                 if (IsDebugVisible)
-                
+                {
+                    SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error summarizing context: {ex.Message}");
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+            }
+        }
+
+        private void ClearContext_Click(object sender, RoutedEventArgs e)
+        {
+            _contextManager.ClearContext();
+            AppendToConversation("\n[System: Context has been cleared.]\n", null);
+
+            if (IsDebugVisible)
+            {
+                SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
+            }
+        }
+
+        private void ShowCurrentContext_Click(object sender, RoutedEventArgs e)
+        {
+            if (!IsDebugVisible)
+            {
+                MessageBox.Show("Please enable the Debug Window to view the context.", "Debug Window Required");
+                return;
+            }
+
+            var fullContext = _contextManager.GetFullContext();
+            SetRichTextContent(DebugBox, fullContext);
+        }
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+}
