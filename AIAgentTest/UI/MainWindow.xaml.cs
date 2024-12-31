@@ -404,42 +404,67 @@ namespace AIAgentTest.UI
             }
         }
 
-        private async void NewSession_Click(object sender, RoutedEventArgs e)
+        private void SessionNameTextBox_KeyDown(object sender, KeyEventArgs e)
         {
-            _contextManager.ClearContext();
+            if (e.Key == Key.Enter)
+            {
+                SaveSessionName();
+            }
+        }
+
+        private void SessionNameTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            SaveSessionName();
+        }
+
+        private async void SaveSessionName()
+        {
+            if (CurrentSession != null)
+            {
+                await _chatSessionService.SaveSessionAsync(CurrentSession);
+                OnPropertyChanged(nameof(CurrentSession));
+            }
+        }
+
+        private async Task CreateNewSession(string name)
+        {
             var session = new ChatSession
             {
-                Name = $"Chat {ChatSessions.Count + 1}",
+                Name = name,
                 ModelName = SelectedModel
             };
             ChatSessions.Add(session);
             CurrentSession = session;
-            ConversationBox.Document.Blocks.Clear();
             await _chatSessionService.SaveSessionAsync(session);
+        }
+
+        private async void NewSession_Click(object sender, RoutedEventArgs e)
+        {
+            await CreateNewSession("New Chat");
         }
 
         private async void SaveSession_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentSession == null) return;
-            await _chatSessionService.SaveSessionAsync(CurrentSession);
+            if (CurrentSession != null)
+            {
+                await _chatSessionService.SaveSessionAsync(CurrentSession);
+            }
         }
 
         private async void DeleteSession_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentSession == null) return;
-            
-            var result = MessageBox.Show(
-                "Are you sure you want to delete this session?",
-                "Confirm Delete",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning
-            );
-
-            if (result == MessageBoxResult.Yes)
+            if (CurrentSession != null)
             {
-                await _chatSessionService.DeleteSessionAsync(CurrentSession.Id);
+                await _chatSessionService.DeleteSessionAsync(CurrentSession);
                 ChatSessions.Remove(CurrentSession);
-                CurrentSession = null;
+                if (ChatSessions.Count == 0)
+                {
+                    await CreateNewSession("New Chat");
+                }
+                else
+                {
+                    CurrentSession = ChatSessions[0];
+                }
             }
         }
 
@@ -488,46 +513,4 @@ namespace AIAgentTest.UI
                 AppendToConversation("[System: Context has been summarized.]\n", null);
 
                 if (IsDebugVisible)
-                {
-                    SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error summarizing context: {ex.Message}");
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-            }
-        }
-
-        private void ClearContext_Click(object sender, RoutedEventArgs e)
-        {
-            _contextManager.ClearContext();
-            AppendToConversation("\n[System: Context has been cleared.]\n", null);
-
-            if (IsDebugVisible)
-            {
-                SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
-            }
-        }
-
-        private void ShowCurrentContext_Click(object sender, RoutedEventArgs e)
-        {
-            if (!IsDebugVisible)
-            {
-                MessageBox.Show("Please enable the Debug Window to view the context.", "Debug Window Required");
-                return;
-            }
-
-            var fullContext = _contextManager.GetFullContext();
-            SetRichTextContent(DebugBox, fullContext);
-        }
-
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-}
+                
