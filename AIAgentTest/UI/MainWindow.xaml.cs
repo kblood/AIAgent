@@ -199,40 +199,26 @@ namespace AIAgentTest.UI
             }
         }
 
-        private async void SubmitInput()
+        private async Task SubmitInput()
         {
-            if (string.IsNullOrWhiteSpace(InputText) || string.IsNullOrWhiteSpace(SelectedModel))
-                return;
-
-            try
-            {
-                AppendToConversation("User: " + InputText + "\n", null);
-
-                string response;
-                if (HasSelectedImage)
-                {
-                    response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
-
-                    // Add image preview to conversation
-                    AppendImageToConversation(SelectedImagePath);
-
-                    // Clear the selected image after processing
-                    SelectedImagePath = null;
-                }
-                else
-                {
-                    response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
-                }
-
-                SetRichTextContent(DebugBox, response);
-                ProcessAndDisplayResponse(response);
-
-                InputText = string.Empty;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred: {ex.Message}");
-            }
+            var input = InputText;
+            _contextManager.AddMessage("user", input);
+    
+            var contextualPrompt = _contextManager.GetContextualPrompt(input);
+            var response = await _ollamaClient.GenerateTextResponseAsync(contextualPrompt, SelectedModel);
+    
+            _contextManager.AddMessage("assistant", response);
+    
+            if (_contextManager.ShouldSummarize())
+                await _contextManager.SummarizeContext(SelectedModel);
+                
+            if (CurrentSession != null)
+                await _chatSessionService.SaveSessionAsync(CurrentSession);
+                
+            AppendToConversation("User: " + input + "\n", null);
+            ProcessAndDisplayResponse(response);
+            
+            InputText = string.Empty;
         }
 
         private void AppendImageToConversation(string imagePath)
@@ -411,15 +397,19 @@ namespace AIAgentTest.UI
         {
             if (CurrentSession == null) return;
             
+            _contextManager.ClearContext();
             ConversationBox.Document.Blocks.Clear();
+            
             foreach (var message in CurrentSession.Messages)
             {
+                _contextManager.AddMessage(message.Role, message.Content);
                 AppendToConversation($"{message.Role}: {message.Content}\n", null);
             }
         }
 
         private async void NewSession_Click(object sender, RoutedEventArgs e)
         {
+            _contextManager.ClearContext();
             var session = new ChatSession
             {
                 Name = $"Chat {ChatSessions.Count + 1}",
@@ -427,6 +417,7 @@ namespace AIAgentTest.UI
             };
             ChatSessions.Add(session);
             CurrentSession = session;
+            ConversationBox.Document.Blocks.Clear();
             await _chatSessionService.SaveSessionAsync(session);
         }
 

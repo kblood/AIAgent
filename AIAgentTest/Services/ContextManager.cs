@@ -45,28 +45,24 @@ namespace AIAgentTest.Services
             _chatHistory.Add(new ChatMessage(role, content));
         }
 
-        public async Task<string> GetContextualPrompt(string userInput)
+        public string GetContextualPrompt(string input)
         {
             if (!IsContextEnabled)
-                return userInput;
+                return input;
 
-            StringBuilder contextBuilder = new StringBuilder();
-
+            var contextBuilder = new StringBuilder();
+    
             if (!string.IsNullOrEmpty(_summarizedContext))
+                contextBuilder.AppendLine($"Previous context summary: {_summarizedContext}");
+    
+            var recentMessages = _chatHistory.TakeLast(5);
+            foreach (var msg in recentMessages)
             {
-                contextBuilder.AppendLine("Previous conversation summary:");
-                contextBuilder.AppendLine(_summarizedContext);
-                contextBuilder.AppendLine();
+                contextBuilder.AppendLine($"{msg.Role}: {msg.Content}");
             }
-
-            // Add recent messages that haven't been summarized
-            foreach (var message in _chatHistory)
-            {
-                contextBuilder.AppendLine($"{message.Role}: {message.Content}");
-            }
-
-            contextBuilder.AppendLine($"User: {userInput}");
-
+    
+            contextBuilder.AppendLine($"User: {input}");
+    
             return contextBuilder.ToString();
         }
 
