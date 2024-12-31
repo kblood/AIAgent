@@ -13,13 +13,26 @@ using Microsoft.Win32;
 using System.IO;
 using System.Windows.Media.Imaging;
 using AIAgentTest.Models;
+//using LLama;
 
 namespace AIAgentTest.UI
 {
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         private readonly ChatSessionService _chatSessionService;
-        private ObservableCollection<ChatSession> ChatSessions { get; } = new();
+
+        ObservableCollection<ChatSession> _chatSessions;
+
+        public ObservableCollection<ChatSession> ChatSessions
+        {
+            get => _chatSessions;
+            set
+            {
+                _chatSessions = value;
+                OnPropertyChanged(nameof(ChatSessions));
+            }
+        }
+
         private ChatSession _currentSession;
         public ChatSession CurrentSession
         {
@@ -27,7 +40,7 @@ namespace AIAgentTest.UI
             set
             {
                 _currentSession = value;
-                OnPropertyChanged();
+                OnPropertyChanged(nameof(_currentSession));
             }
         }
         private readonly OllamaClient _ollamaClient;
@@ -121,16 +134,18 @@ namespace AIAgentTest.UI
         public MainWindow()
         {
             _chatSessionService = new ChatSessionService();
-            LoadSessionsAsync().ContinueWith(_ =>
-            {
-                Dispatcher.Invoke(async () =>
-                {
-                    if (ChatSessions.Count == 0)
-                    {
-                        await CreateNewSession("New Chat");
-                    }
-                });
-            });
+            _chatSessions = new ObservableCollection<ChatSession>();
+            //LoadSessionsAsync();
+            //LoadSessionsAsync().ContinueWith(_ =>
+            //{
+            //    Dispatcher.Invoke(async () =>
+            //    {
+            //        if (ChatSessions.Count == 0)
+            //        {
+            //            await CreateNewSession("New Chat");
+            //        }
+            //    });
+            //});
             InitializeComponent();
             DataContext = this;
 
@@ -380,7 +395,7 @@ namespace AIAgentTest.UI
             }
         }
 
-        private async void LoadSessionsAsync()
+        private async Task LoadSessionsAsync()
         {
             var sessions = await _chatSessionService.ListSessionsAsync();
             ChatSessions.Clear();
@@ -513,4 +528,46 @@ namespace AIAgentTest.UI
                 AppendToConversation("[System: Context has been summarized.]\n", null);
 
                 if (IsDebugVisible)
-                
+                {
+                    SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error summarizing context: {ex.Message}");
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+            }
+        }
+
+        private void ClearContext_Click(object sender, RoutedEventArgs e)
+        {
+            _contextManager.ClearContext();
+            AppendToConversation("\n[System: Context has been cleared.]\n", null);
+
+            if (IsDebugVisible)
+            {
+                SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
+            }
+        }
+
+        private void ShowCurrentContext_Click(object sender, RoutedEventArgs e)
+        {
+            if (!IsDebugVisible)
+            {
+                MessageBox.Show("Please enable the Debug Window to view the context.", "Debug Window Required");
+                return;
+            }
+
+            var fullContext = _contextManager.GetFullContext();
+            SetRichTextContent(DebugBox, fullContext);
+        }
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+}

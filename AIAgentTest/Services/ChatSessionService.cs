@@ -38,6 +38,17 @@ namespace AIAgentTest.Services
             return sessions.OrderByDescending(s => s.UpdatedAt).ToList();
         }
 
+        public async Task<List<ChatSession>> ListSessionsAsync()
+        {
+            var sessions = new List<ChatSession>();
+            foreach (var file in Directory.GetFiles(_sessionsDirectory, "*.json"))
+            {
+                var json = await File.ReadAllTextAsync(file);
+                sessions.Add(JsonSerializer.Deserialize<ChatSession>(json));
+            }
+            return sessions;
+        }
+
         public async Task DeleteSessionAsync(ChatSession session)
         {
             var filePath = Path.Combine(_sessionsDirectory, $"{session.Id}.json");
