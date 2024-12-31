@@ -7,9 +7,10 @@ namespace AIAgentTest.Models
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public string Name { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-        public List<ChatMessage> Messages { get; set; } = new List<ChatMessage>();
         public string ModelName { get; set; }
+        public List<ChatMessage> Messages { get; set; } = new();
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 
     public class ChatMessage

@@ -19,27 +19,15 @@ namespace AIAgentTest.UI
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         private readonly ChatSessionService _chatSessionService;
-        private ObservableCollection<ChatSession> _chatSessions;
+        private ObservableCollection<ChatSession> ChatSessions { get; } = new();
         private ChatSession _currentSession;
-
-        public ObservableCollection<ChatSession> ChatSessions
-        {
-            get => _chatSessions;
-            set
-            {
-                _chatSessions = value;
-                OnPropertyChanged(nameof(ChatSessions));
-            }
-        }
-
         public ChatSession CurrentSession
         {
             get => _currentSession;
             set
             {
                 _currentSession = value;
-                OnPropertyChanged(nameof(CurrentSession));
-                LoadSessionContent();
+                OnPropertyChanged();
             }
         }
         private readonly OllamaClient _ollamaClient;
@@ -133,7 +121,16 @@ namespace AIAgentTest.UI
         public MainWindow()
         {
             _chatSessionService = new ChatSessionService();
-            ChatSessions = new ObservableCollection<ChatSession>();
+            LoadSessionsAsync().ContinueWith(_ =>
+            {
+                Dispatcher.Invoke(async () =>
+                {
+                    if (ChatSessions.Count == 0)
+                    {
+                        await CreateNewSession("New Chat");
+                    }
+                });
+            });
             InitializeComponent();
             DataContext = this;
 

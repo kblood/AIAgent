@@ -48,11 +48,11 @@
         
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,5">
             <TextBlock Text="Chat Sessions:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <ComboBox x:Name="SessionsComboBox" 
-                      Width="200" 
-                      ItemsSource="{Binding ChatSessions}"
-                      SelectedItem="{Binding CurrentSession}"
-                      DisplayMemberPath="Name"/>
+            <TextBox x:Name="SessionNameTextBox" 
+                     Width="200" 
+                     Text="{Binding CurrentSession.Name, UpdateSourceTrigger=PropertyChanged}"
+                     KeyDown="SessionNameTextBox_KeyDown"
+                     LostFocus="SessionNameTextBox_LostFocus"/>
             <Button Content="New Session" 
                     Margin="10,0"
                     Click="NewSession_Click"/>

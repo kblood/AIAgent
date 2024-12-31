@@ -9,51 +9,42 @@ namespace AIAgentTest.Services
 {
     public class ChatSessionService
     {
-        private readonly string _sessionsDirectory;
+        private readonly string _sessionsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Sessions");
 
-        public ChatSessionService(string sessionsDirectory = null)
+        public ChatSessionService()
         {
-            _sessionsDirectory = sessionsDirectory ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "AIAgentTest",
-                "ChatSessions"
-            );
             Directory.CreateDirectory(_sessionsDirectory);
         }
 
         public async Task SaveSessionAsync(ChatSession session)
         {
+            session.UpdatedAt = DateTime.UtcNow;
             var filePath = Path.Combine(_sessionsDirectory, $"{session.Id}.json");
-            var json = JsonSerializer.Serialize(session, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(filePath, json);
+            await File.WriteAllTextAsync(filePath, JsonSerializer.Serialize(session));
         }
 
-        public async Task<ChatSession> LoadSessionAsync(string sessionId)
-        {
-            var filePath = Path.Combine(_sessionsDirectory, $"{sessionId}.json");
-            if (!File.Exists(filePath))
-                return null;
-
-            var json = await File.ReadAllTextAsync(filePath);
-            return JsonSerializer.Deserialize<ChatSession>(json);
-        }
-
-        public async Task<List<ChatSession>> ListSessionsAsync()
+        public async Task<List<ChatSession>> LoadSessionsAsync()
         {
             var sessions = new List<ChatSession>();
             foreach (var file in Directory.GetFiles(_sessionsDirectory, "*.json"))
             {
                 var json = await File.ReadAllTextAsync(file);
-                sessions.Add(JsonSerializer.Deserialize<ChatSession>(json));
+                var session = JsonSerializer.Deserialize<ChatSession>(json);
+                if (session != null)
+                {
+                    sessions.Add(session);
+                }
             }
-            return sessions;
+            return sessions.OrderByDescending(s => s.UpdatedAt).ToList();
         }
 
-        public async Task DeleteSessionAsync(string sessionId)
+        public async Task DeleteSessionAsync(ChatSession session)
         {
-            var filePath = Path.Combine(_sessionsDirectory, $"{sessionId}.json");
+            var filePath = Path.Combine(_sessionsDirectory, $"{session.Id}.json");
             if (File.Exists(filePath))
+            {
                 File.Delete(filePath);
+            }
         }
     }
 }
