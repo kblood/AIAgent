@@ -211,26 +211,58 @@ namespace AIAgentTest.UI
             }
         }
 
-        private async Task SubmitInput()
+        private async void SubmitInput()
         {
-            var input = InputText;
-            _contextManager.AddMessage("user", input);
-    
-            var contextualPrompt = _contextManager.GetContextualPrompt(input);
-            var response = await _ollamaClient.GenerateTextResponseAsync(contextualPrompt, SelectedModel);
-    
-            _contextManager.AddMessage("assistant", response);
-    
-            if (await _contextManager.ShouldSummarize())
-                await _contextManager.SummarizeContext(SelectedModel);
+            if (string.IsNullOrWhiteSpace(InputText) || string.IsNullOrWhiteSpace(SelectedModel) || CurrentSession == null)
+                return;
+
+            try
+            {
+                string savedImagePath = HasSelectedImage ? CopyImageToAppStorage(SelectedImagePath) : null;
                 
-            if (CurrentSession != null)
+                CurrentSession.Messages.Add(new Models.ChatMessage 
+                { 
+                    Role = "User", 
+                    Content = InputText,
+                    ImagePath = savedImagePath
+                });
+
+                AppendToConversation("User: " + InputText + "\n", null);
+
+                string response;
+                if (HasSelectedImage)
+                {
+                    response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    AppendImageToConversation(SelectedImagePath);
+                    SelectedImagePath = null;
+                }
+                else
+                {
+                    response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
+                }
+
+                CurrentSession.Messages.Add(new Models.ChatMessage 
+                { 
+                    Role = SelectedModel, 
+                    Content = response 
+                });
+
+                SetRichTextContent(DebugBox, response);
+                ProcessAndDisplayResponse(response);
+
+                if (CurrentSession.Messages.Count == 6 && CurrentSession.Name.StartsWith("Chat "))
+                {
+                    await GenerateSessionNameAsync();
+                }
+
                 await _chatSessionService.SaveSessionAsync(CurrentSession);
-                
-            AppendToConversation("User: " + input + "\n", null);
-            ProcessAndDisplayResponse(response);
-            
-            InputText = string.Empty;
+
+                InputText = string.Empty;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}");
+            }
         }
 
         private void AppendImageToConversation(string imagePath)
@@ -409,13 +441,14 @@ namespace AIAgentTest.UI
         {
             if (CurrentSession == null) return;
             
-            _contextManager.ClearContext();
             ConversationBox.Document.Blocks.Clear();
-            
             foreach (var message in CurrentSession.Messages)
             {
-                _contextManager.AddMessage(message.Role, message.Content);
                 AppendToConversation($"{message.Role}: {message.Content}\n", null);
+                if (!string.IsNullOrEmpty(message.ImagePath) && File.Exists(message.ImagePath))
+                {
+                    AppendImageToConversation(message.ImagePath);
+                }
             }
         }
 
@@ -455,7 +488,15 @@ namespace AIAgentTest.UI
 
         private async void NewSession_Click(object sender, RoutedEventArgs e)
         {
-            await CreateNewSession("New Chat");
+            var session = new ChatSession
+            {
+                Name = $"Chat {ChatSessions.Count + 1}",
+                ModelName = SelectedModel
+            };
+            ChatSessions.Add(session);
+            CurrentSession = session;
+            SessionsComboBox.SelectedItem = session;
+            await _chatSessionService.SaveSessionAsync(session);
         }
 
         private async void SaveSession_Click(object sender, RoutedEventArgs e)
@@ -479,95 +520,4 @@ namespace AIAgentTest.UI
                 else
                 {
                     CurrentSession = ChatSessions[0];
-                }
-            }
-        }
-
-        private void Exit_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
-
-        private void ToggleDebugWindow_Click(object sender, RoutedEventArgs e)
-        {
-            IsDebugVisible = !IsDebugVisible;
-            UpdateDebugColumnWidth();
-        }
-
-        private async void RefreshModels_Click(object sender, RoutedEventArgs e)
-        {
-            await LoadModelsAsync();
-        }
-
-        private void ModelSettings_Click(object sender, RoutedEventArgs e)
-        {
-            MessageBox.Show("Model settings dialog not implemented yet.", "Model Settings",
-                          MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        private void About_Click(object sender, RoutedEventArgs e)
-        {
-            MessageBox.Show("AI Agent Framework\nVersion 1.0\n\nA user interface for interacting with local AI models.",
-                          "About", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
-        private void ToggleContext_Click(object sender, RoutedEventArgs e)
-        {
-            IsContextEnabled = !IsContextEnabled;
-        }
-
-        private async void SummarizeContext_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var originalCursor = Mouse.OverrideCursor;
-                Mouse.OverrideCursor = Cursors.Wait;
-
-                AppendToConversation("\n[System: Summarizing context...]\n", null);
-                await _contextManager.SummarizeContext(SelectedModel);
-                AppendToConversation("[System: Context has been summarized.]\n", null);
-
-                if (IsDebugVisible)
-                {
-                    SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error summarizing context: {ex.Message}");
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-            }
-        }
-
-        private void ClearContext_Click(object sender, RoutedEventArgs e)
-        {
-            _contextManager.ClearContext();
-            AppendToConversation("\n[System: Context has been cleared.]\n", null);
-
-            if (IsDebugVisible)
-            {
-                SetRichTextContent(DebugBox, _contextManager.GetDebugInfo());
-            }
-        }
-
-        private void ShowCurrentContext_Click(object sender, RoutedEventArgs e)
-        {
-            if (!IsDebugVisible)
-            {
-                MessageBox.Show("Please enable the Debug Window to view the context.", "Debug Window Required");
-                return;
-            }
-
-            var fullContext = _contextManager.GetFullContext();
-            SetRichTextContent(DebugBox, fullContext);
-        }
-
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-}
+                
