@@ -41,6 +41,7 @@ namespace AIAgentTest.UI
             {
                 _currentSession = value;
                 OnPropertyChanged(nameof(_currentSession));
+                LoadSessionContent();
             }
         }
         private readonly OllamaClient _ollamaClient;
@@ -135,17 +136,6 @@ namespace AIAgentTest.UI
         {
             _chatSessionService = new ChatSessionService();
             _chatSessions = new ObservableCollection<ChatSession>();
-            //LoadSessionsAsync();
-            //LoadSessionsAsync().ContinueWith(_ =>
-            //{
-            //    Dispatcher.Invoke(async () =>
-            //    {
-            //        if (ChatSessions.Count == 0)
-            //        {
-            //            await CreateNewSession("New Chat");
-            //        }
-            //    });
-            //});
             InitializeComponent();
             DataContext = this;
 
@@ -207,30 +197,101 @@ namespace AIAgentTest.UI
             if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
                 e.Handled = true;
+                EnsureSessionExists();
                 SubmitInput();
             }
         }
 
-        private async Task SubmitInput()
+        private async void SubmitInput()
         {
-            var input = InputText;
-            _contextManager.AddMessage("user", input);
-    
-            var contextualPrompt = _contextManager.GetContextualPrompt(input);
-            var response = await _ollamaClient.GenerateTextResponseAsync(contextualPrompt, SelectedModel);
-    
-            _contextManager.AddMessage("assistant", response);
-    
-            if (await _contextManager.ShouldSummarize())
-                await _contextManager.SummarizeContext(SelectedModel);
-                
-            if (CurrentSession != null)
+            if (string.IsNullOrWhiteSpace(InputText) || string.IsNullOrWhiteSpace(SelectedModel) || CurrentSession == null)
+                return;
+
+            try
+            {
+                // Add user message to session
+                CurrentSession.Messages.Add(new Models.ChatMessage
+                {
+                    Role = "User",
+                    Content = InputText
+                });
+
+                AppendToConversation("User: " + InputText + "\n", null);
+
+                string response;
+                if (HasSelectedImage)
+                {
+                    response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    AppendImageToConversation(SelectedImagePath);
+                    SelectedImagePath = null;
+                }
+                else
+                {
+                    response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
+                }
+
+                // Add assistant message to session
+                CurrentSession.Messages.Add(new Models.ChatMessage
+                {
+                    Role = SelectedModel,
+                    Content = response
+                });
+
+                SetRichTextContent(DebugBox, response);
+                ProcessAndDisplayResponse(response);
+
+                // Check if we should generate a session name (after 3rd message pair)
+                if (CurrentSession.Messages.Count >= 6 && CurrentSession.Name.Count() < 10 && (CurrentSession.Name.StartsWith("Chat ")|| (CurrentSession.Name.StartsWith("New "))))
+                {
+                    await GenerateSessionNameAsync();
+                }
+
+                // Save session after each message exchange
                 await _chatSessionService.SaveSessionAsync(CurrentSession);
-                
-            AppendToConversation("User: " + input + "\n", null);
-            ProcessAndDisplayResponse(response);
-            
-            InputText = string.Empty;
+
+                InputText = string.Empty;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred: {ex.Message}");
+            }
+        }
+
+        private async Task GenerateSessionNameAsync()
+        {
+            try
+            {
+                // Create a prompt for the model to generate a session name
+                var namePrompt = "Based on this conversation, generate a concise and descriptive name (maximum 30 characters) that captures the main topic or purpose. Respond with only the name, no explanations or quotes:\n\n";
+
+                // Add the conversation content to the prompt
+                foreach (var message in CurrentSession.Messages)
+                {
+                    namePrompt += $"{message.Role}: {message.Content}\n";
+                }
+
+                // Get the generated name from the model
+                var generatedName = await _ollamaClient.GenerateTextResponseAsync(namePrompt, SelectedModel);
+
+                // Clean up and truncate the name
+                generatedName = generatedName.Trim().TrimEnd('.').TrimEnd();
+                if (generatedName.Length > 30)
+                {
+                    generatedName = generatedName.Substring(0, 27) + "...";
+                }
+
+                // Update the session name
+                CurrentSession.Name = generatedName;
+                OnPropertyChanged(nameof(CurrentSession));
+
+                // Save the session with the new name
+                await _chatSessionService.SaveSessionAsync(CurrentSession);
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't disrupt the chat flow
+                Console.WriteLine($"Error generating session name: {ex.Message}");
+            }
         }
 
         private void AppendImageToConversation(string imagePath)
@@ -408,14 +469,36 @@ namespace AIAgentTest.UI
         private void LoadSessionContent()
         {
             if (CurrentSession == null) return;
-            
-            _contextManager.ClearContext();
+
             ConversationBox.Document.Blocks.Clear();
-            
+            CodeBox.Document.Blocks.Clear();
+
             foreach (var message in CurrentSession.Messages)
             {
-                _contextManager.AddMessage(message.Role, message.Content);
-                AppendToConversation($"{message.Role}: {message.Content}\n", null);
+                if (message.Role == "User")
+                {
+                    AppendToConversation($"User: {message.Content}\n", null);
+                }
+                else
+                {
+                    AppendToConversation($"{message.Role}: ", null);
+                    ProcessAndDisplayResponse(message.Content);
+                }
+            }
+        }
+
+        private async void EnsureSessionExists()
+        {
+            if (CurrentSession == null)
+            {
+                var session = new ChatSession
+                {
+                    Name = $"Chat {ChatSessions.Count + 1}",
+                    ModelName = SelectedModel
+                };
+                ChatSessions.Add(session);
+                CurrentSession = session;
+                await _chatSessionService.SaveSessionAsync(session);
             }
         }
 
@@ -455,7 +538,15 @@ namespace AIAgentTest.UI
 
         private async void NewSession_Click(object sender, RoutedEventArgs e)
         {
-            await CreateNewSession("New Chat");
+            var session = new ChatSession
+            {
+                Name = $"Chat {ChatSessions.Count + 1}",
+                ModelName = SelectedModel
+            };
+            ChatSessions.Add(session);
+            CurrentSession = session;  // This will trigger the selection in the ComboBox
+            SessionsComboBox.SelectedItem = session;  // Explicitly set the ComboBox selection
+            await _chatSessionService.SaveSessionAsync(session);
         }
 
         private async void SaveSession_Click(object sender, RoutedEventArgs e)
