@@ -213,7 +213,8 @@ namespace AIAgentTest.UI
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
                     Role = "User",
-                    Content = InputText
+                    Content = InputText,
+                    ImagePath = HasSelectedImage ? SelectedImagePath : null  // Save image path if present
                 });
 
                 AppendToConversation("User: " + InputText + "\n", null);
@@ -475,15 +476,24 @@ namespace AIAgentTest.UI
 
             foreach (var message in CurrentSession.Messages)
             {
-                if (message.Role == "User")
+                // Display the message text
+                AppendToConversation($"{message.Role}: {message.Content}\n", null);
+
+                // If the message has an associated image, display it
+                if (!string.IsNullOrEmpty(message.ImagePath) && File.Exists(message.ImagePath))
                 {
-                    AppendToConversation($"User: {message.Content}\n", null);
+                    AppendImageToConversation(message.ImagePath);
                 }
-                else
-                {
-                    AppendToConversation($"{message.Role}: ", null);
-                    ProcessAndDisplayResponse(message.Content);
-                }
+
+                //if (message.Role == "User")
+                //{
+                //    AppendToConversation($"User: {message.Content}\n", null);
+                //}
+                //else
+                //{
+                //    AppendToConversation($"{message.Role}: ", null);
+                //    ProcessAndDisplayResponse(message.Content);
+                //}
             }
         }
 
