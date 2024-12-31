@@ -17,6 +17,30 @@ namespace AIAgentTest.UI
 {
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
+        private readonly ChatSessionService _chatSessionService;
+        private ObservableCollection<ChatSession> _chatSessions;
+        private ChatSession _currentSession;
+
+        public ObservableCollection<ChatSession> ChatSessions
+        {
+            get => _chatSessions;
+            set
+            {
+                _chatSessions = value;
+                OnPropertyChanged(nameof(ChatSessions));
+            }
+        }
+
+        public ChatSession CurrentSession
+        {
+            get => _currentSession;
+            set
+            {
+                _currentSession = value;
+                OnPropertyChanged(nameof(CurrentSession));
+                LoadSessionContent();
+            }
+        }
         private readonly OllamaClient _ollamaClient;
         private readonly ContextManager _contextManager;
         private ObservableCollection<string> _availableModels;
@@ -107,6 +131,8 @@ namespace AIAgentTest.UI
 
         public MainWindow()
         {
+            _chatSessionService = new ChatSessionService();
+            ChatSessions = new ObservableCollection<ChatSession>();
             InitializeComponent();
             DataContext = this;
 
@@ -121,6 +147,7 @@ namespace AIAgentTest.UI
             };
 
             LoadModelsAsync();
+            LoadSessionsAsync();
 
             CodeBox.TextChanged += (s, e) => CodeBox.ScrollToEnd();
             ConversationBox.TextChanged += (s, e) => ConversationBox.ScrollToEnd();
@@ -366,6 +393,64 @@ namespace AIAgentTest.UI
                 TextRange range = new TextRange(CodeBox.Document.ContentStart,
                                               CodeBox.Document.ContentEnd);
                 File.WriteAllText(dialog.FileName, range.Text);
+            }
+        }
+
+        private async void LoadSessionsAsync()
+        {
+            var sessions = await _chatSessionService.ListSessionsAsync();
+            ChatSessions.Clear();
+            foreach (var session in sessions)
+            {
+                ChatSessions.Add(session);
+            }
+        }
+
+        private void LoadSessionContent()
+        {
+            if (CurrentSession == null) return;
+            
+            ConversationBox.Document.Blocks.Clear();
+            foreach (var message in CurrentSession.Messages)
+            {
+                AppendToConversation($"{message.Role}: {message.Content}\n", null);
+            }
+        }
+
+        private async void NewSession_Click(object sender, RoutedEventArgs e)
+        {
+            var session = new ChatSession
+            {
+                Name = $"Chat {ChatSessions.Count + 1}",
+                ModelName = SelectedModel
+            };
+            ChatSessions.Add(session);
+            CurrentSession = session;
+            await _chatSessionService.SaveSessionAsync(session);
+        }
+
+        private async void SaveSession_Click(object sender, RoutedEventArgs e)
+        {
+            if (CurrentSession == null) return;
+            await _chatSessionService.SaveSessionAsync(CurrentSession);
+        }
+
+        private async void DeleteSession_Click(object sender, RoutedEventArgs e)
+        {
+            if (CurrentSession == null) return;
+            
+            var result = MessageBox.Show(
+                "Are you sure you want to delete this session?",
+                "Confirm Delete",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning
+            );
+
+            if (result == MessageBoxResult.Yes)
+            {
+                await _chatSessionService.DeleteSessionAsync(CurrentSession.Id);
+                ChatSessions.Remove(CurrentSession);
+                CurrentSession = null;
             }
         }
 
