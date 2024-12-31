@@ -397,7 +397,7 @@ namespace AIAgentTest.UI
 
         private async Task LoadSessionsAsync()
         {
-            var sessions = await _chatSessionService.ListSessionsAsync();
+            var sessions = await _chatSessionService.LoadSessionsAsync();
             ChatSessions.Clear();
             foreach (var session in sessions)
             {
