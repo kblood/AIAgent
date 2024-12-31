@@ -209,7 +209,7 @@ namespace AIAgentTest.UI
     
             _contextManager.AddMessage("assistant", response);
     
-            if (_contextManager.ShouldSummarize())
+            if (await _contextManager.ShouldSummarize())
                 await _contextManager.SummarizeContext(SelectedModel);
                 
             if (CurrentSession != null)
