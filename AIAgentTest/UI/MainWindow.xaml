@@ -144,15 +144,31 @@
             <!-- Bottom Controls -->
             <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="True">
                 <ComboBox x:Name="ModelComboBox" 
-                          DockPanel.Dock="Left"
-                          Width="200"
-                          Margin="0,0,10,0"
-                          ItemsSource="{Binding AvailableModels}"
-                          SelectedItem="{Binding SelectedModel}"/>
+              DockPanel.Dock="Left"
+              Width="200"
+              Margin="0,0,10,0"
+              ItemsSource="{Binding AvailableModels}"
+              SelectedItem="{Binding SelectedModel}"/>
+                <Button x:Name="AddImageButton"
+            DockPanel.Dock="Left"
+            Width="30"
+            Height="30"
+            Margin="0,0,10,0"
+            Click="AddImageButton_Click"
+            ToolTip="Add image to prompt">
+                    <!--<Image Source="pack://application:,,,/Resources/image-icon.png"/>-->
+                    <TextBlock Text="+" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+                <TextBlock x:Name="SelectedImageText"
+               DockPanel.Dock="Left"
+               Margin="0,0,10,0"
+               VerticalAlignment="Center"
+               Text="{Binding SelectedImagePath}"
+               TextTrimming="CharacterEllipsis"/>
                 <TextBox x:Name="InputTextBox"
-                         Height="30"
-                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
-                         KeyDown="InputTextBox_KeyDown"/>
+             Height="30"
+             Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+             KeyDown="InputTextBox_KeyDown"/>
             </DockPanel>
         </Grid>
     </DockPanel>

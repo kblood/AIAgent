@@ -56,7 +56,7 @@ namespace AIAgentTest.API_Clients
             return responseBuilder.ToString();
         }
 
-        public async Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string model = "llava")
+        public async Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string model = "x/llama3.2-vision:11b")
         {
             byte[] imageBytes = await File.ReadAllBytesAsync(imagePath);
             string base64Image = Convert.ToBase64String(imageBytes);
