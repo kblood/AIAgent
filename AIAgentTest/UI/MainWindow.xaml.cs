@@ -75,6 +75,13 @@ namespace AIAgentTest.UI
             }
         }
 
+        private void VisionModelButton_Click(object sender, RoutedEventArgs e)
+        {
+            var visionModelWindow = new VisionModelWindow();
+            visionModelWindow.ShowDialog();
+        }
+
+
         public ObservableCollection<string> AvailableModels
         {
             get => _availableModels;
