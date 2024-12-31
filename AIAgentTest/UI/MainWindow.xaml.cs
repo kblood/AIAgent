@@ -213,7 +213,8 @@ namespace AIAgentTest.UI
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
                     Role = "User",
-                    Content = InputText
+                    Content = InputText,
+                    ImagePath = HasSelectedImage ? SelectedImagePath : null  // Save image path if present
                 });
 
                 AppendToConversation("User: " + InputText + "\n", null);
@@ -238,7 +239,7 @@ namespace AIAgentTest.UI
                 });
 
                 SetRichTextContent(DebugBox, response);
-                ProcessAndDisplayResponse(response);
+                ProcessAndDisplayMessageWithCode(response);
 
                 // Check if we should generate a session name (after 3rd message pair)
                 if (CurrentSession.Messages.Count >= 6 && CurrentSession.Name.Count() < 10 && (CurrentSession.Name.StartsWith("Chat ")|| (CurrentSession.Name.StartsWith("New "))))
@@ -311,7 +312,7 @@ namespace AIAgentTest.UI
             ConversationBox.ScrollToEnd();
         }
 
-        private void ProcessAndDisplayResponse(string response)
+        private void ProcessAndDisplayMessageWithCode(string response)
         {
             AppendToConversation($"{SelectedModel}: ", null);
 
@@ -475,15 +476,30 @@ namespace AIAgentTest.UI
 
             foreach (var message in CurrentSession.Messages)
             {
-                if (message.Role == "User")
+                // Display the message text
+                //AppendToConversation($"{message.Role}: {message.Content}\n", null);
+
+                //if (message.Role == "User")
+                //{
+                //    AppendToConversation($"User: {message.Content}\n", null);
+                //}
+                //else
+                //{
+                //    AppendToConversation($"{message.Role}: ", null);
+                //    ProcessAndDisplayResponse(message.Content);
+                //}
+
+                // Display the message text with code formatting
+                AppendToConversation($"{message.Role}: ", null);
+                ProcessAndDisplayMessageWithCode(message.Content);
+
+                // If the message has an associated image, display it
+                if (!string.IsNullOrEmpty(message.ImagePath) && File.Exists(message.ImagePath))
                 {
-                    AppendToConversation($"User: {message.Content}\n", null);
+                    AppendImageToConversation(message.ImagePath);
                 }
-                else
-                {
-                    AppendToConversation($"{message.Role}: ", null);
-                    ProcessAndDisplayResponse(message.Content);
-                }
+
+               
             }
         }
 
