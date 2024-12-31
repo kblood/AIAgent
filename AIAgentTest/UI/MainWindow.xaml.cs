@@ -11,6 +11,7 @@ using AIAgentTest.API_Clients;
 using AIAgentTest.Services;
 using Microsoft.Win32;
 using System.IO;
+using System.Windows.Media.Imaging;
 
 namespace AIAgentTest.UI
 {
@@ -25,6 +26,33 @@ namespace AIAgentTest.UI
         private bool _isContextEnabled = true;
 
         public event PropertyChangedEventHandler PropertyChanged;
+
+        private string _selectedImagePath;
+        public string SelectedImagePath
+        {
+            get => _selectedImagePath;
+            set
+            {
+                _selectedImagePath = value;
+                OnPropertyChanged(nameof(SelectedImagePath));
+            }
+        }
+
+        private bool HasSelectedImage => !string.IsNullOrEmpty(SelectedImagePath) && File.Exists(SelectedImagePath);
+
+        private void AddImageButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Image files (*.png;*.jpg;*.jpeg;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.bmp|All files (*.*)|*.*",
+                Title = "Select an image"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                SelectedImagePath = dialog.FileName;
+            }
+        }
 
         public bool IsDebugVisible
         {
@@ -151,32 +179,25 @@ namespace AIAgentTest.UI
             try
             {
                 AppendToConversation("User: " + InputText + "\n", null);
-                _contextManager.AddMessage("User", InputText);
 
-                string contextualPrompt = await _contextManager.GetContextualPrompt(InputText);
-                string response = await _ollamaClient.GenerateTextResponseAsync(contextualPrompt, SelectedModel);
-
-                // Add the response to context
-                _contextManager.AddMessage("Assistant", response);
-
-                // Update debug info
-                if (IsDebugVisible)
+                string response;
+                if (HasSelectedImage)
                 {
-                    string debugInfo = _contextManager.GetDebugInfo();
-                    SetRichTextContent(DebugBox, debugInfo + "\n\nRaw Response:\n" + response);
+                    response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+
+                    // Add image preview to conversation
+                    AppendImageToConversation(SelectedImagePath);
+
+                    // Clear the selected image after processing
+                    SelectedImagePath = null;
                 }
                 else
                 {
-                    SetRichTextContent(DebugBox, response);
+                    response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
                 }
 
+                SetRichTextContent(DebugBox, response);
                 ProcessAndDisplayResponse(response);
-
-                // Check if we should suggest summarization
-                if (await _contextManager.ShouldSummarize())
-                {
-                    AppendToConversation("\n[System: Context is getting long. Consider summarizing.]\n", null);
-                }
 
                 InputText = string.Empty;
             }
@@ -184,6 +205,23 @@ namespace AIAgentTest.UI
             {
                 MessageBox.Show($"An error occurred: {ex.Message}");
             }
+        }
+
+        private void AppendImageToConversation(string imagePath)
+        {
+            var paragraph = new Paragraph();
+            var image = new System.Windows.Controls.Image
+            {
+                Source = new BitmapImage(new Uri(imagePath)),
+                MaxHeight = 200,
+                MaxWidth = 200,
+                Stretch = Stretch.Uniform
+            };
+
+            var container = new InlineUIContainer(image);
+            paragraph.Inlines.Add(container);
+            ConversationBox.Document.Blocks.Add(paragraph);
+            ConversationBox.ScrollToEnd();
         }
 
         private void ProcessAndDisplayResponse(string response)
