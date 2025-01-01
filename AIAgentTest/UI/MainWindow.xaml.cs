@@ -65,7 +65,18 @@ namespace AIAgentTest.UI
             }
         }
     
-        public bool IsDarkTheme => !IsLightTheme;
+        //public bool IsDarkTheme => !_isLightTheme;
+
+        public bool IsDarkTheme
+        {
+            get => !_isLightTheme;
+            set
+            {
+                _isLightTheme = !value;
+                OnPropertyChanged(nameof(IsLightTheme));
+                OnPropertyChanged(nameof(IsDarkTheme));
+            }
+        }
 
         public event PropertyChangedEventHandler PropertyChanged;
 
