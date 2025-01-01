@@ -713,22 +713,38 @@ namespace AIAgentTest.UI
 
         private void ApplyTheme(bool isLight)
         {
-            var theme = isLight ? "BackgroundBrush" : "BackgroundBrushDark";
-            var foreground = isLight ? "ForegroundBrush" : "ForegroundBrushDark";
-            var border = isLight ? "BorderBrush" : "BorderBrushDark";
-            
-            Resources["BackgroundBrush"] = Resources[isLight ? "BackgroundBrush" : "BackgroundBrushDark"];
-            Resources["ForegroundBrush"] = Resources[isLight ? "ForegroundBrush" : "ForegroundBrushDark"]; 
-            Resources["BorderBrush"] = Resources[isLight ? "BorderBrush" : "BorderBrushDark"];
-            
+            var theme = isLight ? null : Resources["DarkTheme"] as ResourceDictionary;
+            if (theme != null)
+            {
+                var keys = new string[] { "WindowBackground", "TextColor", "MenuBackground", "BorderColor" };
+                foreach (var key in keys)
+                {
+                    if (theme.Contains(key))
+                    {
+                        Resources[key] = theme[key];
+                    }
+                }
+            }
+            else
+            {
+                Resources["WindowBackground"] = new SolidColorBrush(Colors.White);
+                Resources["TextColor"] = new SolidColorBrush(Colors.Black);
+                Resources["MenuBackground"] = new SolidColorBrush(Colors.WhiteSmoke);
+                Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(204, 204, 204));
+            }
+
             Properties.Settings.Default.IsLightTheme = isLight;
             Properties.Settings.Default.Save();
         }
 
         private void ThemeMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            IsLightTheme = ((MenuItem)sender).Header.ToString() == "Light Theme";
-            ApplyTheme(IsLightTheme);
+            if (sender is MenuItem menuItem)
+            {
+                bool isLight = menuItem.Header.ToString() == "Light";
+                IsLightTheme = isLight;
+                ApplyTheme(isLight);
+            }
         }
 
         protected virtual void OnPropertyChanged(string propertyName)
