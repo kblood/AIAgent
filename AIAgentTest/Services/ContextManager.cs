@@ -45,6 +45,14 @@ namespace AIAgentTest.Services
             _chatHistory.Add(new ChatMessage(role, content));
         }
 
+        public DateTime GetLastMessageTimestamp()
+        {
+            if (_chatHistory.Count == 0)
+                return DateTime.MinValue;
+
+            return _chatHistory[^1].Timestamp;
+        }
+
         public string GetContextualPrompt(string input)
         {
             if (!IsContextEnabled)

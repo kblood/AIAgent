@@ -217,7 +217,7 @@ namespace AIAgentTest.UI
                     ImagePath = HasSelectedImage ? SelectedImagePath : null  // Save image path if present
                 });
 
-                AppendToConversation("User: " + InputText + "\n", null);
+                AppendToConversation($"User: {InputText}\n", null);
 
                 string response;
                 if (HasSelectedImage)
@@ -239,6 +239,7 @@ namespace AIAgentTest.UI
                 });
 
                 SetRichTextContent(DebugBox, response);
+                AppendToConversation($"{SelectedModel}: ", null);
                 ProcessAndDisplayMessageWithCode(response);
 
                 // Check if we should generate a session name (after 3rd message pair)
@@ -251,6 +252,13 @@ namespace AIAgentTest.UI
                 await _chatSessionService.SaveSessionAsync(CurrentSession);
 
                 InputText = string.Empty;
+
+                // Update the context with the latest messages
+                var latestContext = _contextManager.GetLastMessageTimestamp();
+                foreach (var msg in CurrentSession.Messages.Where(m => m.Timestamp > latestContext).ToArray())
+                {
+                    _contextManager.AddMessage(msg.Role, msg.Content);
+                }
             }
             catch (Exception ex)
             {
@@ -312,18 +320,16 @@ namespace AIAgentTest.UI
             ConversationBox.ScrollToEnd();
         }
 
-        private void ProcessAndDisplayMessageWithCode(string response)
+        private void ProcessAndDisplayMessageWithCode(string message)
         {
-            AppendToConversation($"{SelectedModel}: ", null);
-
             string pattern = @"```(\w*)\r?\n(.*?)\r?\n```|```(\w*)\s*(.*?)```";
             int lastIndex = 0;
 
-            var matches = Regex.Matches(response, pattern, RegexOptions.Singleline);
+            var matches = Regex.Matches(message, pattern, RegexOptions.Singleline);
 
             foreach (Match match in matches)
             {
-                string textBefore = response.Substring(lastIndex, match.Index - lastIndex);
+                string textBefore = message.Substring(lastIndex, match.Index - lastIndex);
                 if (!string.IsNullOrWhiteSpace(textBefore))
                 {
                     AppendToConversation(textBefore, null);
@@ -338,7 +344,7 @@ namespace AIAgentTest.UI
                 lastIndex = match.Index + match.Length;
             }
 
-            string remaining = response.Substring(lastIndex);
+            string remaining = message.Substring(lastIndex);
             if (!string.IsNullOrWhiteSpace(remaining))
             {
                 AppendToConversation(remaining, null);
@@ -473,33 +479,21 @@ namespace AIAgentTest.UI
 
             ConversationBox.Document.Blocks.Clear();
             CodeBox.Document.Blocks.Clear();
+            _contextManager.ClearContext();
 
             foreach (var message in CurrentSession.Messages)
             {
-                // Display the message text
-                //AppendToConversation($"{message.Role}: {message.Content}\n", null);
-
-                //if (message.Role == "User")
-                //{
-                //    AppendToConversation($"User: {message.Content}\n", null);
-                //}
-                //else
-                //{
-                //    AppendToConversation($"{message.Role}: ", null);
-                //    ProcessAndDisplayResponse(message.Content);
-                //}
-
                 // Display the message text with code formatting
                 AppendToConversation($"{message.Role}: ", null);
-                ProcessAndDisplayMessageWithCode(message.Content);
+                //ProcessAndDisplayMessageWithCode($"{message.Role}: {message.Content}");
+                ProcessAndDisplayMessageWithCode($"{message.Content}");
 
                 // If the message has an associated image, display it
                 if (!string.IsNullOrEmpty(message.ImagePath) && File.Exists(message.ImagePath))
                 {
                     AppendImageToConversation(message.ImagePath);
                 }
-
-               
+                _contextManager.AddMessage(message.Role, message.Content);
             }
         }
 
@@ -563,6 +557,11 @@ namespace AIAgentTest.UI
             CurrentSession = session;  // This will trigger the selection in the ComboBox
             SessionsComboBox.SelectedItem = session;  // Explicitly set the ComboBox selection
             await _chatSessionService.SaveSessionAsync(session);
+            _contextManager.ClearContext();
+            foreach(var msg in CurrentSession.Messages)
+            {
+                _contextManager.AddMessage(msg.Role, msg.Content);
+            }
         }
 
         private async void SaveSession_Click(object sender, RoutedEventArgs e)
@@ -620,7 +619,19 @@ namespace AIAgentTest.UI
 
         private void ToggleContext_Click(object sender, RoutedEventArgs e)
         {
-            IsContextEnabled = !IsContextEnabled;
+            //IsContextEnabled = !IsContextEnabled;
+            if(IsContextEnabled)
+            {
+                _contextManager.ClearContext();
+                foreach (var msg in CurrentSession.Messages)
+                {
+                    _contextManager.AddMessage(msg.Role, msg.Content);
+                }
+            }
+            else
+            {
+                _contextManager.ClearContext();
+            }
         }
 
         private async void SummarizeContext_Click(object sender, RoutedEventArgs e)
