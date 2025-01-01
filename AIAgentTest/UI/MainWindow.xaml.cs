@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
+using AIAgentTest.Properties;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
