@@ -8,24 +8,62 @@
         xmlns:properties="clr-namespace:AIAgentTest.Properties"
         mc:Ignorable="d"
         Title="AI Agent Framework" Height="800" Width="1500">
+    <Window.Style>
+        <Style TargetType="Window">
+            <Setter Property="Background" Value="{DynamicResource WindowBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+        </Style>
+    </Window.Style>
 
     <Window.Resources>
         <ResourceDictionary>
             <!-- Light Theme -->
-            <SolidColorBrush x:Key="BackgroundBrush" Color="#FFFFFF"/>
-            <SolidColorBrush x:Key="ForegroundBrush" Color="#000000"/>
-            <SolidColorBrush x:Key="BorderBrush" Color="#CCCCCC"/>
-            
+            <SolidColorBrush x:Key="WindowBackground" Color="White"/>
+            <SolidColorBrush x:Key="TextColor" Color="Black"/>
+            <SolidColorBrush x:Key="MenuBackground" Color="WhiteSmoke"/>
+            <SolidColorBrush x:Key="BorderColor" Color="#CCCCCC"/>
+
             <!-- Dark Theme -->
-            <SolidColorBrush x:Key="BackgroundBrushDark" Color="#2D2D2D"/>
-            <SolidColorBrush x:Key="ForegroundBrushDark" Color="#FFFFFF"/>
-            <SolidColorBrush x:Key="BorderBrushDark" Color="#404040"/>
-            
+            <ResourceDictionary x:Key="DarkTheme">
+                <SolidColorBrush x:Key="WindowBackground" Color="#2D2D2D"/>
+                <SolidColorBrush x:Key="TextColor" Color="White"/>
+                <SolidColorBrush x:Key="MenuBackground" Color="#1E1E1E"/>
+                <SolidColorBrush x:Key="BorderColor" Color="#404040"/>
+            </ResourceDictionary>
+
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         </ResourceDictionary>
     </Window.Resources>
 
     <DockPanel>
+        <DockPanel.Resources>
+            <Style TargetType="Menu">
+                <Setter Property="Background" Value="{DynamicResource MenuBackground}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+            </Style>
+            <Style TargetType="MenuItem">
+                <Setter Property="Background" Value="{DynamicResource MenuBackground}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+            </Style>
+            <Style TargetType="RichTextBox">
+                <Setter Property="Background" Value="{DynamicResource WindowBackground}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            </Style>
+            <Style TargetType="TextBox">
+                <Setter Property="Background" Value="{DynamicResource WindowBackground}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            </Style>
+            <Style TargetType="ComboBox">
+                <Setter Property="Background" Value="{DynamicResource WindowBackground}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            </Style>
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource TextColor}"/>
+            </Style>
+        </DockPanel.Resources>
         <!-- Menu Bar -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
@@ -35,8 +73,16 @@
                 <MenuItem Header="_Exit" Click="Exit_Click"/>
             </MenuItem>
             <MenuItem Header="_View">
-                <MenuItem Header="Light Theme" Click="ThemeMenuItem_Click" IsChecked="{Binding IsLightTheme}"/>
-                <MenuItem Header="Dark Theme" Click="ThemeMenuItem_Click" IsChecked="{Binding IsDarkTheme}"/>
+                <MenuItem Header="Theme">
+                    <MenuItem Header="Light" 
+                              IsCheckable="True"
+                              IsChecked="{Binding IsLightTheme}"
+                              Click="ThemeMenuItem_Click"/>
+                    <MenuItem Header="Dark"
+                              IsCheckable="True" 
+                              IsChecked="{Binding IsDarkTheme}"
+                              Click="ThemeMenuItem_Click"/>
+                </MenuItem>
                 <Separator/>
                 <MenuItem Header="Show _Debug Window" 
                           IsCheckable="True" 
