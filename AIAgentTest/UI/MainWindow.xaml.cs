@@ -51,6 +51,20 @@ namespace AIAgentTest.UI
         private string _inputText;
         private bool _isDebugVisible = true;
         private bool _isContextEnabled = true;
+        private bool _isLightTheme = true;
+    
+        public bool IsLightTheme
+        {
+            get => _isLightTheme;
+            set
+            {
+                _isLightTheme = value;
+                OnPropertyChanged(nameof(IsLightTheme));
+                OnPropertyChanged(nameof(IsDarkTheme));
+            }
+        }
+    
+        public bool IsDarkTheme => !IsLightTheme;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -138,6 +152,8 @@ namespace AIAgentTest.UI
             _chatSessions = new ObservableCollection<ChatSession>();
             InitializeComponent();
             DataContext = this;
+            IsLightTheme = Properties.Settings.Default.IsLightTheme;
+            ApplyTheme(IsLightTheme);
 
             _ollamaClient = new OllamaClient();
             _contextManager = new ContextManager(_ollamaClient);
@@ -681,6 +697,26 @@ namespace AIAgentTest.UI
 
             var fullContext = _contextManager.GetFullContext();
             SetRichTextContent(DebugBox, fullContext);
+        }
+
+        private void ApplyTheme(bool isLight)
+        {
+            var theme = isLight ? "BackgroundBrush" : "BackgroundBrushDark";
+            var foreground = isLight ? "ForegroundBrush" : "ForegroundBrushDark";
+            var border = isLight ? "BorderBrush" : "BorderBrushDark";
+            
+            Resources["BackgroundBrush"] = Resources[isLight ? "BackgroundBrush" : "BackgroundBrushDark"];
+            Resources["ForegroundBrush"] = Resources[isLight ? "ForegroundBrush" : "ForegroundBrushDark"]; 
+            Resources["BorderBrush"] = Resources[isLight ? "BorderBrush" : "BorderBrushDark"];
+            
+            Properties.Settings.Default.IsLightTheme = isLight;
+            Properties.Settings.Default.Save();
+        }
+
+        private void ThemeMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            IsLightTheme = ((MenuItem)sender).Header.ToString() == "Light Theme";
+            ApplyTheme(IsLightTheme);
         }
 
         protected virtual void OnPropertyChanged(string propertyName)
