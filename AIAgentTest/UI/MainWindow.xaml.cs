@@ -256,7 +256,16 @@ namespace AIAgentTest.UI
                 }
                 else
                 {
-                    response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
+                    if(_isContextEnabled)
+                    {
+                        var fullContext = _contextManager.GetFullContext();
+                        response = await _ollamaClient.GenerateTextResponseAsync(fullContext +"\n"+ InputText, SelectedModel);
+                    }
+                    else
+                    {
+                        // Generate a response from the model (without context)
+                        response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
+                    }
                 }
 
                 // Add assistant message to session
@@ -431,7 +440,12 @@ namespace AIAgentTest.UI
                     CodeBox.Document = document;
 
                     var originalBackground = CodeBox.Background;
-                    CodeBox.Background = Brushes.LightYellow;
+                    // Use a theme-appropriate highlight color
+                    var highlightColor = IsLightTheme ?
+                        new SolidColorBrush(Color.FromRgb(255, 255, 224)) : // Light yellow
+                        new SolidColorBrush(Color.FromRgb(51, 51, 0));      // Dark yellow
+
+                    CodeBox.Background = highlightColor;
 
                     var timer = new System.Windows.Threading.DispatcherTimer
                     {
@@ -713,10 +727,24 @@ namespace AIAgentTest.UI
 
         private void ApplyTheme(bool isLight)
         {
-            var theme = isLight ? null : Resources["DarkTheme"] as ResourceDictionary;
+            //var theme = isLight ? null : Resources["DarkTheme"] as ResourceDictionary;
+            var theme = isLight ?
+        Resources["LightTheme"] as ResourceDictionary :
+        Resources["DarkTheme"] as ResourceDictionary;
             if (theme != null)
             {
-                var keys = new string[] { "WindowBackground", "TextColor", "MenuBackground", "BorderColor" };
+                var keys = new[]
+                {
+                    "WindowBackground",
+                    "TextColor",
+                    "MenuBackground",
+                    "BorderColor",
+                    "ControlBackground",
+                    "SelectionBackground",
+                    "HyperlinkColor",
+                    "MenuItemSelectedBackground",
+                    "ComboBoxBackground"
+                };
                 foreach (var key in keys)
                 {
                     if (theme.Contains(key))
@@ -727,14 +755,39 @@ namespace AIAgentTest.UI
             }
             else
             {
+                // Light theme colors
                 Resources["WindowBackground"] = new SolidColorBrush(Colors.White);
                 Resources["TextColor"] = new SolidColorBrush(Colors.Black);
                 Resources["MenuBackground"] = new SolidColorBrush(Colors.WhiteSmoke);
                 Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(204, 204, 204));
+                Resources["ControlBackground"] = new SolidColorBrush(Colors.White);
+                Resources["SelectionBackground"] = new SolidColorBrush(Color.FromRgb(173, 216, 230)); // Light blue
+                Resources["HyperlinkColor"] = new SolidColorBrush(Color.FromRgb(0, 102, 204));
             }
 
             Properties.Settings.Default.IsLightTheme = isLight;
             Properties.Settings.Default.Save();
+        }
+
+        private void UpdateCodeLinkColors()
+        {
+            var hyperlinkColor = Resources["HyperlinkColor"] as SolidColorBrush;
+            var document = ConversationBox.Document;
+            var textRange = new TextRange(document.ContentStart, document.ContentEnd);
+
+            foreach (var block in document.Blocks)
+            {
+                if (block is Paragraph paragraph)
+                {
+                    foreach (var inline in paragraph.Inlines)
+                    {
+                        if (inline is Hyperlink hyperlink)
+                        {
+                            hyperlink.Foreground = hyperlinkColor;
+                        }
+                    }
+                }
+            }
         }
 
         private void ThemeMenuItem_Click(object sender, RoutedEventArgs e)
