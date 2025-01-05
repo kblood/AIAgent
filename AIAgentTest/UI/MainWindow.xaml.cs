@@ -14,6 +14,7 @@ using Microsoft.Win32;
 using System.IO;
 using System.Windows.Media.Imaging;
 using AIAgentTest.Models;
+using AIAgentTest.Services;
 //using LLama;
 
 namespace AIAgentTest.UI
@@ -53,6 +54,7 @@ namespace AIAgentTest.UI
         private bool _isDebugVisible = true;
         private bool _isContextEnabled = true;
         private bool _isLightTheme = true;
+        private readonly FunctionCallingService _functionService;
     
         public bool IsLightTheme
         {
@@ -177,6 +179,9 @@ namespace AIAgentTest.UI
                 LineHeight = 1
             };
 
+            _functionService = new FunctionCallingService();
+            RegisterDefaultFunctions();
+            
             LoadModelsAsync();
             LoadSessionsAsync();
 
@@ -230,6 +235,28 @@ namespace AIAgentTest.UI
             }
         }
 
+        private void RegisterDefaultFunctions()
+        {
+            _functionService.RegisterFunction(
+                "get_weather",
+                "Get the current weather for a location",
+                new Dictionary<string, ParameterDefinition>
+                {
+                    ["location"] = new ParameterDefinition
+                    {
+                        Type = "string",
+                        Description = "The city name",
+                        Required = true
+                    }
+                },
+                async (args) =>
+                {
+                    var location = args["location"].ToString();
+                    return $"Weather in {location}: 22°C, Partly Cloudy";
+                }
+            );
+        }
+
         private async void SubmitInput()
         {
             if (string.IsNullOrWhiteSpace(InputText) || string.IsNullOrWhiteSpace(SelectedModel) || CurrentSession == null)
@@ -256,16 +283,18 @@ namespace AIAgentTest.UI
                 }
                 else
                 {
-                    if(_isContextEnabled)
-                    {
-                        var fullContext = _contextManager.GetFullContext();
-                        response = await _ollamaClient.GenerateTextResponseAsync(fullContext +"\n"+ InputText, SelectedModel);
-                    }
-                    else
-                    {
-                        // Generate a response from the model (without context)
-                        response = await _ollamaClient.GenerateTextResponseAsync(InputText, SelectedModel);
-                    }
+                    var functionDefinitions = _functionService.GetFunctionDefinitions();
+                    var prompt = _isContextEnabled
+                        ? _contextManager.GetContextualPrompt(InputText)
+                        : InputText;
+
+                    response = await _ollamaClient.GenerateWithFunctionsAsync(
+                        prompt,
+                        SelectedModel,
+                        JsonSerializer.Deserialize<List<FunctionDefinition>>(functionDefinitions)
+                    );
+
+                    response = await _functionService.ProcessAIResponse(response);
                 }
 
                 // Add assistant message to session
