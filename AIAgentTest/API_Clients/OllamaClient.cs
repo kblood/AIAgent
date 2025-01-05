@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using AIAgentTest.Services;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 using HtmlDocument = HtmlAgilityPack.HtmlDocument;
@@ -307,5 +308,22 @@ namespace AIAgentTest.API_Clients
         }
 
 
+    }
+
+    public async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
+    {
+        var request = new
+        {
+            model = model,
+            prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, new JsonSerializerOptions { WriteIndented = true })}",
+            system = "You are an AI assistant that can call functions. When you need to use a function, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally."
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
+
+        response.EnsureSuccessStatusCode();
+        var responseContent = await response.Content.ReadAsStringAsync();
+        return ExtractPlainTextResponse(responseContent);
     }
 }
