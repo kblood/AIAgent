@@ -15,6 +15,7 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using AIAgentTest.Models;
 using AIAgentTest.Services;
+using System.Text.Json;
 //using LLama;
 
 namespace AIAgentTest.UI

@@ -33,15 +33,15 @@ namespace AIAgentTest.API_Clients
             {
                 ContextSize = (uint)contextSize,
                 GpuLayerCount = gpuLayerCount,
-                Seed = 1337,
+                //Seed = 1337,
                 MainGpu = 0,
                 SplitMode = LLama.Native.GPUSplitMode.None,
                 //EmbeddingMode = false,
                 UseMemoryLock = true,
                 UseMemorymap = true,
-                Threads = (uint)Math.Max(Environment.ProcessorCount - 1, 1),
+                Threads = (int)Math.Max(Environment.ProcessorCount - 1, 1),
                 BatchSize = 512,
-                BatchThreads = (uint?)Environment.ProcessorCount
+                BatchThreads = (int?)Environment.ProcessorCount
             };
 
             _model = LLamaWeights.LoadFromFile(modelParams);
@@ -53,10 +53,10 @@ namespace AIAgentTest.API_Clients
         {
             var inferenceParams = new InferenceParams
             {
-                Temperature = 0.7f,
-                TopK = 40,
-                TopP = 0.95f,
-                RepeatPenalty = 1.1f,
+                //Temperature = 0.7f,
+                //TopK = 40,
+                //TopP = 0.95f,
+                //RepeatPenalty = 1.1f,
                 MaxTokens = 2048  // Set a high value, we'll use custom stopping logic
             };
 

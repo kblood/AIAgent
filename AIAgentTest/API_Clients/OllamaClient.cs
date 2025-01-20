@@ -20,6 +20,7 @@ namespace AIAgentTest.API_Clients
         public OllamaClient(string ollamaBaseUrl = "http://localhost:11434")
         {
             _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromMinutes(5);
             _ollamaBaseUrl = ollamaBaseUrl;
         }
 
@@ -29,6 +30,23 @@ namespace AIAgentTest.API_Clients
             var responseText = ExtractPlainTextResponse(responseJson);
 
             return responseText;
+        }
+
+        public async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
+        {
+            var request = new
+            {
+                model = model,
+                prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, new JsonSerializerOptions { WriteIndented = true })}",
+                system = "You are an AI assistant that can call functions. If you need to use a function and the function is available, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally."
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
+
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+            return ExtractPlainTextResponse(responseContent);
         }
 
         public string ExtractPlainTextResponse(string jsonLines)
@@ -310,20 +328,5 @@ namespace AIAgentTest.API_Clients
 
     }
 
-    public async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
-    {
-        var request = new
-        {
-            model = model,
-            prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, new JsonSerializerOptions { WriteIndented = true })}",
-            system = "You are an AI assistant that can call functions. When you need to use a function, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally."
-        };
-
-        var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
-
-        response.EnsureSuccessStatusCode();
-        var responseContent = await response.Content.ReadAsStringAsync();
-        return ExtractPlainTextResponse(responseContent);
-    }
+    
 }

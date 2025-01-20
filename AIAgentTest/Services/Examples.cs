@@ -31,14 +31,14 @@ namespace AIAgentTest.Examples
                 var parameters = new ModelParams(modelPath);
                 parameters.ContextSize = 4096;
                 parameters.GpuLayerCount = 32;
-                parameters.Seed = 1337;
+                //parameters.Seed = 1337;
                 parameters.MainGpu = 0;
                 parameters.SplitMode = GPUSplitMode.None;
                 parameters.UseMemoryLock = true;
                 parameters.UseMemorymap = true;
-                parameters.Threads = (uint)Math.Max(Environment.ProcessorCount - 1, 1);
+                parameters.Threads = (int)Math.Max(Environment.ProcessorCount - 1, 1);
                 parameters.BatchSize = 512;
-                parameters.BatchThreads = (uint?)Environment.ProcessorCount;
+                parameters.BatchThreads = (int?)Environment.ProcessorCount;
 
                 Console.WriteLine("Loading LLamaWeights");
                 using var model = LLamaWeights.LoadFromFile(parameters);
@@ -54,7 +54,9 @@ namespace AIAgentTest.Examples
                 Console.WriteLine($"The executor has been enabled. Max tokens: {maxTokens}, Context size: {parameters.ContextSize}");
                 Console.WriteLine("To send an image, enter its filename in curly braces, like this {c:/image.jpg}.");
 
-                var inferenceParams = new InferenceParams() { Temperature = 0.1f, AntiPrompts = new List<string> { "\nUSER:" }, MaxTokens = maxTokens };
+                var inferenceParams = new InferenceParams() 
+                { //Temperature = 0.1f, 
+                    AntiPrompts = new List<string> { "\nUSER:" }, MaxTokens = maxTokens };
 
                 Console.WriteLine("Starting RunInteractiveLoopAsync");
                 await RunInteractiveLoopAsync(ex, prompt, inferenceParams);
