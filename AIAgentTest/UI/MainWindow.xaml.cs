@@ -237,6 +237,23 @@ namespace AIAgentTest.UI
 
             try
             {
+                var response = await _client.GenerateTextResponseAsync(InputText.Text);
+                if (Settings.Default.DebugMode)
+                {
+                    DebugOutput.Text += $"\nPerformance Metrics:\n" +
+                                   $"Response Time: {_client.LastMetrics.ResponseTimeMs}ms\n" +
+                                   $"Memory Usage: {_client.LastMetrics.MemoryUsageBytes / 1024 / 1024}MB\n" +
+                                   $"GPU Utilization: {_client.LastMetrics.GpuUtilization:F1}%\n";
+                }
+                ResponseText.Text = response;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+
+            try
+            {
                 // Add user message to session
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
@@ -657,6 +674,18 @@ namespace AIAgentTest.UI
         {
             MessageBox.Show("AI Agent Framework\nVersion 1.0\n\nA user interface for interacting with local AI models.",
                           "About", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void ViewPerformanceReport_Click(object sender, RoutedEventArgs e)
+        {
+            var logs = _performanceLogger.LoadExistingLogs();
+            var report = string.Join("\n\n", logs.Select(l => 
+                $"Time: {l.Timestamp}\n" +
+                $"Model: {l.ModelName}\n" +
+                $"Response Time: {l.ResponseTimeMs}ms\n" +
+                $"Memory: {l.MemoryUsageBytes / 1024 / 1024}MB"));
+            
+            MessageBox.Show(report, "Performance Report");
         }
 
         private void ToggleContext_Click(object sender, RoutedEventArgs e)
