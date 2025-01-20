@@ -15,6 +15,7 @@ namespace AIAgentTest.API_Clients
     {
         private readonly HttpClient _httpClient;
         private readonly string _ollamaBaseUrl;
+        private readonly PerformanceLogger _performanceLogger = new();
 
         public OllamaClient(string ollamaBaseUrl = "http://localhost:11434")
         {
@@ -22,12 +23,37 @@ namespace AIAgentTest.API_Clients
             _ollamaBaseUrl = ollamaBaseUrl;
         }
 
-        public async Task<string> GenerateTextResponseAsync(string prompt, string model = "llama3")
+        public async Task<string> GenerateTextResponseAsync(string prompt)
         {
-            var responseJson = await GenerateResponseAsync(prompt, model);
-            var responseText = ExtractPlainTextResponse(responseJson);
+            var metrics = new PerformanceMetrics
+            {
+                Timestamp = DateTime.UtcNow,
+                ModelName = _modelName,
+                PromptText = prompt
+            };
 
-            return responseText;
+            var stopwatch = Stopwatch.StartNew();
+            var gpuBefore = await _gpuService.GetGPUUtilization();
+            
+            try
+            {
+                var response = await _client.GenerateAsync(prompt);
+                stopwatch.Stop();
+                
+                var gpuAfter = await _gpuService.GetGPUUtilization();
+                metrics.ResponseTimeMs = stopwatch.ElapsedMilliseconds;
+                metrics.GpuUtilization = Math.Max(gpuBefore, gpuAfter);
+                metrics.MemoryUsageBytes = Process.GetCurrentProcess().WorkingSet64;
+                
+                _performanceLogger.LogMetrics(metrics);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                metrics.ResponseTimeMs = stopwatch.ElapsedMilliseconds;
+                _performanceLogger.LogMetrics(metrics);
+                throw;
+            }
         }
 
         public string ExtractPlainTextResponse(string jsonLines)
