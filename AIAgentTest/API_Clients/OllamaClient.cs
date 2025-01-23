@@ -32,13 +32,34 @@ namespace AIAgentTest.API_Clients
             return responseText;
         }
 
+        /*
+         
+         Formula: Size of KV cache per token in bytes = 2 * (num_layers) * (num_heads * dim_head) *  precision_in_bytes. (Stick this message pls, i'm tired of searching for it)
+
+From Ollama: 
+// fp16 k,v = sizeof(float16) * n_ctx * n_layer * (n_embd_head_k + n_embd_head_v) * n_head_kv
+
+var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().EmbeddingHeadCountK() + ggml.KV().EmbeddingHeadCountV()) * ggml.KV().HeadCountKV()
+         */
+
         public async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
         {
             var request = new
             {
                 model = model,
-                prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, new JsonSerializerOptions { WriteIndented = true })}",
-                system = "You are an AI assistant that can call functions. If you need to use a function and the function is available, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally."
+                //prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, new JsonSerializerOptions { WriteIndented = true })}",
+                prompt = $"{prompt}",
+                //system = "You are an AI assistant that can call functions. If you need to use a function and the function is available, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally."
+                //,
+                options = new
+                {
+                    num_ctx = 4096,  // Your custom context size
+                    //num_gpu = 1,      // Ensure GPU usage
+                    main_gpu = 0,     // Primary GPU device
+                    low_vram = false, // Disable low VRAM mode
+                    use_mmap = true,  // Enable memory mapping
+                    use_mlock = false // Disable memory locking
+                }
             };
 
             var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
@@ -46,6 +67,9 @@ namespace AIAgentTest.API_Clients
 
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
+
+            var stats = ExtractResponseStats(responseContent);
+
             return ExtractPlainTextResponse(responseContent);
         }
 
@@ -73,6 +97,61 @@ namespace AIAgentTest.API_Clients
             }
 
             return responseBuilder.ToString();
+        }
+
+        public Dictionary<string,string> ExtractResponseStats(string jsonLines)
+        {
+            try
+            {
+                Dictionary<string, string> responseStats = new Dictionary<string, string>();
+
+                foreach (var line in jsonLines.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    try
+                    {
+                        using (JsonDocument doc = JsonDocument.Parse(line))
+                        {
+                            JsonElement root = doc.RootElement;
+                            if (root.TryGetProperty("done_reason", out JsonElement responseElement))
+                            {
+                                responseStats.Add("done_reason", responseElement.GetString());
+                            }
+                            if (root.TryGetProperty("total_duration", out responseElement))
+                            {
+                                //responseStats.Add("total_duration", responseElement.GetInt32().ToString());
+                                responseStats.Add("total_duration", responseElement.ToString());
+                            }
+                            if (root.TryGetProperty("prompt_eval_count", out responseElement))
+                            {
+                                responseStats.Add("prompt_eval_count", responseElement.GetInt32().ToString());
+                            }
+                            if (root.TryGetProperty("prompt_eval_duration", out responseElement))
+                            {
+                                responseStats.Add("prompt_eval_duration", responseElement.GetInt32().ToString());
+                            }
+                            if (root.TryGetProperty("eval_count", out responseElement))
+                            {
+                                responseStats.Add("eval_count", responseElement.GetInt32().ToString());
+                            }
+                            if (root.TryGetProperty("eval_duration", out responseElement))
+                            {
+                                responseStats.Add("eval_duration", responseElement.GetInt32().ToString());
+                            }
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Failed to parse JSON: {ex.Message}");
+                    }
+                }
+
+                return responseStats;
+            }
+            catch
+            {
+                return null;
+            }
+
         }
 
         public async Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string model = "x/llama3.2-vision:11b")
