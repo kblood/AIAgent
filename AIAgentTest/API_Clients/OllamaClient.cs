@@ -9,6 +9,7 @@ using AIAgentTest.Services;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 using HtmlDocument = HtmlAgilityPack.HtmlDocument;
+using System.Diagnostics;
 
 namespace AIAgentTest.API_Clients
 {
@@ -42,6 +43,50 @@ From Ollama:
 var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().EmbeddingHeadCountK() + ggml.KV().EmbeddingHeadCountV()) * ggml.KV().HeadCountKV()
          */
 
+        public async IAsyncEnumerable<string> GenerateStreamResponseAsync(string prompt, string model)
+        {
+            var request = new
+            {
+                model = model,
+                prompt = prompt,
+                stream = true
+            };
+
+            var jsonContent = JsonSerializer.Serialize(request);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            using var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
+            response.EnsureSuccessStatusCode();
+
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(stream);
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                string? result = null;
+                try
+                {
+                    using var jsonDoc = JsonDocument.Parse(line);
+                    if (jsonDoc.RootElement.TryGetProperty("response", out var responseElement))
+                    {
+                        result = responseElement.GetString();
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Skip malformed JSON
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(result))
+                {
+                    yield return result;
+                }
+            }
+        }
+
         public async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
         {
             var request = new
@@ -53,7 +98,7 @@ var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().Em
                 //,
                 options = new
                 {
-                    num_ctx = 4096,  // Your custom context size
+                    num_ctx = 2048,  // Your custom context size
                     //num_gpu = 1,      // Ensure GPU usage
                     main_gpu = 0,     // Primary GPU device
                     low_vram = false, // Disable low VRAM mode

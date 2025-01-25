@@ -16,6 +16,7 @@ using System.Windows.Media.Imaging;
 using AIAgentTest.Models;
 using AIAgentTest.Services;
 using System.Text.Json;
+using System.Text;
 //using LLama;
 
 namespace AIAgentTest.UI
@@ -258,29 +259,44 @@ namespace AIAgentTest.UI
             );
         }
 
-        private async void SubmitInput()
+        // These enums help us keep track of whether we're parsing code, text, or a code language line.
+        private enum ParserState
         {
-            if (string.IsNullOrWhiteSpace(InputText) || string.IsNullOrWhiteSpace(SelectedModel) || CurrentSession == null)
+            OutsideCodeBlock,
+            DetectingLanguage,
+            InsideCodeBlock
+        }
+
+        private async Task SubmitInput()
+        {
+            if (string.IsNullOrWhiteSpace(InputText) ||
+                string.IsNullOrWhiteSpace(SelectedModel) ||
+                CurrentSession == null)
                 return;
 
             try
             {
-                // Add user message to session
+                // 1) Add user message to session
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
                     Role = "User",
                     Content = InputText,
-                    ImagePath = HasSelectedImage ? SelectedImagePath : null  // Save image path if present
+                    ImagePath = HasSelectedImage ? SelectedImagePath : null
                 });
-
+                if(!ConversationBox.ToString().EndsWith("\n") && !ConversationBox.ToString().EndsWith("\n\r"))
+                {
+                    AppendToConversation("\n", null);
+                }
                 AppendToConversation($"User: {InputText}\n", null);
 
-                string response;
+                string fullResponse = "";
                 if (HasSelectedImage)
                 {
-                    response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    var response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
                     AppendImageToConversation(SelectedImagePath);
                     SelectedImagePath = null;
+                    fullResponse = response;
+                    ProcessAndDisplayMessageWithCode(response);
                 }
                 else
                 {
@@ -289,38 +305,189 @@ namespace AIAgentTest.UI
                         ? _contextManager.GetContextualPrompt(InputText)
                         : InputText;
 
-                    response = await _ollamaClient.GenerateWithFunctionsAsync(
-                        prompt,
-                        SelectedModel,
-                        JsonSerializer.Deserialize<List<FunctionDefinition>>(functionDefinitions)
-                    );
+                    AppendToConversation($"{SelectedModel}: ", null);
 
-                    response = await _functionService.ProcessAIResponse(response);
+                    // 2) Here is the improved streaming logic for code blocks + language
+                    var responseBuilder = new StringBuilder();       // Full textual record
+                    var currentCodeBlock = new StringBuilder();      // Accumulate code characters
+                    var currentCodeLanguage = new StringBuilder();   // Capture language (if any)
+
+                    bool inCodeBlock = false;          // True once we've found an opening ```
+                    int backtickCount = 0;             // Track consecutive backticks
+                    ParserState parserState = ParserState.OutsideCodeBlock;
+
+                    // We'll stream the response chunk-by-chunk
+                    await foreach (var chunk in _ollamaClient.GenerateStreamResponseAsync(prompt, SelectedModel))
+                    {
+                        // Update the UI inside the dispatcher
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            foreach (char c in chunk)
+                            {
+                                // Always append to the overall response
+                                responseBuilder.Append(c);
+
+                                if (c == '`')
+                                {
+                                    backtickCount++;
+
+                                    // Check if we hit triple backticks
+                                    if (backtickCount == 3)
+                                    {
+                                        backtickCount = 0; // Reset
+
+                                        if (!inCodeBlock)
+                                        {
+                                            // We are opening a code block
+                                            inCodeBlock = true;
+                                            parserState = ParserState.DetectingLanguage;
+                                            // Clear old data
+                                            currentCodeLanguage.Clear();
+                                            currentCodeBlock.Clear();
+                                        }
+                                        else
+                                        {
+                                            // We are closing a code block
+                                            inCodeBlock = false;
+                                            parserState = ParserState.OutsideCodeBlock;
+
+                                            // We have a complete code block in currentCodeBlock
+                                            // plus an optional language in currentCodeLanguage.
+
+                                            // Build a well-formed triple-backtick block:
+                                            // e.g.:  ```csharp
+                                            //         ...code...
+                                            //         ```
+                                            var codeBlockText = new StringBuilder();
+                                            codeBlockText.Append("```");
+                                            if (currentCodeLanguage.Length > 0)
+                                            {
+                                                codeBlockText.Append(currentCodeLanguage);
+                                            }
+                                            codeBlockText.AppendLine(); // newline after ```lang
+                                            codeBlockText.Append(currentCodeBlock);
+                                            codeBlockText.AppendLine();
+                                            codeBlockText.Append("```");
+
+                                            // Now your existing regex method can parse it:
+                                            ProcessAndDisplayMessageWithCode(codeBlockText.ToString());
+
+                                            // Clear for next possible code block
+                                            currentCodeBlock.Clear();
+                                            currentCodeLanguage.Clear();
+                                        }
+                                    }
+                                    // If we have 1 or 2 backticks, do nothing *yet*.
+                                }
+                                else
+                                {
+                                    // c is not a backtick
+                                    // If we had partial backticks (1 or 2), flush them appropriately
+                                    if (backtickCount > 0)
+                                    {
+                                        // We are either inside or outside a code block
+                                        //  -> If outside, we flush them to conversation
+                                        //  -> If inside, flush them to the code builder
+                                        if (!inCodeBlock)
+                                        {
+                                            // We were outside a code block
+                                            for (int i = 0; i < backtickCount; i++)
+                                                AppendToConversation("`", null);
+                                        }
+                                        else
+                                        {
+                                            // We were inside a code block
+                                            for (int i = 0; i < backtickCount; i++)
+                                                currentCodeBlock.Append('`');
+
+                                            // Refresh partial code in CodeBox
+                                            SetRichTextContent(CodeBox, currentCodeBlock.ToString());
+                                        }
+                                        backtickCount = 0;
+                                    }
+
+                                    // Now handle the current char
+                                    switch (parserState)
+                                    {
+                                        case ParserState.OutsideCodeBlock:
+                                            // Normal text
+                                            AppendToConversation(c.ToString(), null);
+                                            break;
+
+                                        case ParserState.DetectingLanguage:
+                                            // Immediately after opening ``` - we might capture a language name
+                                            // Typically we read until we hit whitespace, newline, or another backtick.
+                                            // If c is whitespace/newline, it means the language spec ended.
+                                            if (char.IsWhiteSpace(c) || c == '\r' || c == '\n')
+                                            {
+                                                // Done capturing language, now we are truly "inside" the code
+                                                parserState = ParserState.InsideCodeBlock;
+                                            }
+                                            else
+                                            {
+                                                // Keep capturing language characters
+                                                currentCodeLanguage.Append(c);
+                                            }
+                                            break;
+
+                                        case ParserState.InsideCodeBlock:
+                                            // Accumulate code
+                                            currentCodeBlock.Append(c);
+                                            // Optionally update the code in real time
+                                            SetRichTextContent(CodeBox, currentCodeBlock.ToString());
+                                            break;
+                                    }
+                                }
+                            }
+                        });
+
+                        await Task.Delay(1); // Small delay to let UI breathe
+                    }
+
+                    // 3) If we never closed a code block by the end of the stream,
+                    //    we can finalize it anyway (to avoid losing partial code).
+                    //    But this is optional. If you prefer to ignore incomplete code blocks, skip this.
+                    if (inCodeBlock)
+                    {
+                        var codeBlockText = new StringBuilder("```");
+                        if (currentCodeLanguage.Length > 0)
+                        {
+                            codeBlockText.Append(currentCodeLanguage);
+                        }
+                        codeBlockText.AppendLine();
+                        codeBlockText.Append(currentCodeBlock);
+                        codeBlockText.AppendLine();
+                        codeBlockText.Append("```");
+
+                        ProcessAndDisplayMessageWithCode(codeBlockText.ToString());
+                    }
+
+                    // 4) Final full response
+                    fullResponse = responseBuilder.ToString();
                 }
 
                 // Add assistant message to session
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
                     Role = SelectedModel,
-                    Content = response
+                    Content = fullResponse
                 });
 
-                SetRichTextContent(DebugBox, response);
-                AppendToConversation($"{SelectedModel}: ", null);
-                ProcessAndDisplayMessageWithCode(response);
+                // Optionally set debug output
+                SetRichTextContent(DebugBox, fullResponse);
 
-                // Check if we should generate a session name (after 3rd message pair)
-                if (CurrentSession.Messages.Count >= 6 && CurrentSession.Name.Count() < 10 && (CurrentSession.Name.StartsWith("Chat ")|| (CurrentSession.Name.StartsWith("New "))))
+                // Possibly rename the session if certain conditions are met
+                if (CurrentSession.Messages.Count >= 6 &&
+                    CurrentSession.Name.Length < 10 &&
+                    (CurrentSession.Name.StartsWith("Chat ") || CurrentSession.Name.StartsWith("New ")))
                 {
                     await GenerateSessionNameAsync();
                 }
 
-                // Save session after each message exchange
                 await _chatSessionService.SaveSessionAsync(CurrentSession);
-
                 InputText = string.Empty;
 
-                // Update the context with the latest messages
+                // Update context with new messages
                 var latestContext = _contextManager.GetLastMessageTimestamp();
                 foreach (var msg in CurrentSession.Messages.Where(m => m.Timestamp > latestContext).ToArray())
                 {
@@ -422,16 +589,22 @@ namespace AIAgentTest.UI
 
         private void AppendToConversation(string text, FontFamily fontFamily = null)
         {
-            var paragraph = new Paragraph();
-            var run = new Run(text);
+            if (string.IsNullOrEmpty(text)) return;
 
+            var paragraph = ConversationBox.Document.Blocks.LastBlock as Paragraph;
+            if (paragraph == null)
+            {
+                paragraph = new Paragraph();
+                ConversationBox.Document.Blocks.Add(paragraph);
+            }
+
+            var run = new Run(text);
             if (fontFamily != null)
             {
                 run.FontFamily = fontFamily;
             }
 
             paragraph.Inlines.Add(run);
-            ConversationBox.Document.Blocks.Add(paragraph);
             ConversationBox.ScrollToEnd();
         }
 
