@@ -272,26 +272,19 @@ var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().Em
             return loadedModels;
         }
 
-        public async Task<List<string>> GetRunningModelsAsync()
+        public async Task<ModelList> GetRunningModelsAsync()
         {
-            var runningModels = new List<string>();
-            var availableModels = await GetAvailableModelsAsync();
-
-            foreach (var model in availableModels)
+            var response = await _httpClient.GetAsync($"{_ollamaBaseUrl}/api/ps");
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions
             {
-                try
-                {
-                    // We'll use a very short prompt to check if the model responds quickly
-                    var response = await GenerateResponseAsync("are you running?", model.Name);
-                    runningModels.Add(model.Name);
-                }
-                catch
-                {
-                    // If an exception occurs, the model is likely not running
-                }
-            }
+                PropertyNameCaseInsensitive = true
+            };
+            var modelList = JsonSerializer.Deserialize<ModelList>(content, options);
+            //return modelList.Models.Select(m => m.Name).ToList();
+            return modelList;
 
-            return runningModels;
         }
 
         public async Task LoadModelAsync(string modelName)

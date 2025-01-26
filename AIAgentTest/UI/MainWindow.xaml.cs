@@ -49,6 +49,7 @@ namespace AIAgentTest.UI
             }
         }
         private readonly OllamaClient _ollamaClient;
+        private readonly OpenedAI_VisionClient _openedAI_VisionClient;
         private readonly ContextManager _contextManager;
         private ObservableCollection<string> _availableModels;
         private string _selectedModel;
@@ -172,6 +173,7 @@ namespace AIAgentTest.UI
             ApplyTheme(IsLightTheme);
 
             _ollamaClient = new OllamaClient();
+            _openedAI_VisionClient = new OpenedAI_VisionClient();
             _contextManager = new ContextManager(_ollamaClient);
             AvailableModels = new ObservableCollection<string>();
 
@@ -216,7 +218,12 @@ namespace AIAgentTest.UI
                     AvailableModels.Add(model.Name);
                 }
 
-                if (AvailableModels.Count > 0)
+                var runningModels = await _ollamaClient.GetRunningModelsAsync();
+                if(runningModels != null && runningModels.Models.Count > 0)
+                {
+                    SelectedModel = runningModels.Models.First().Name;
+                }
+                else if (AvailableModels.Count > 0)
                 {
                     SelectedModel = AvailableModels[0];
                 }
@@ -292,7 +299,8 @@ namespace AIAgentTest.UI
                 string fullResponse = "";
                 if (HasSelectedImage)
                 {
-                    var response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    var response = await _openedAI_VisionClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    //var response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
                     AppendImageToConversation(SelectedImagePath);
                     SelectedImagePath = null;
                     fullResponse = response;
