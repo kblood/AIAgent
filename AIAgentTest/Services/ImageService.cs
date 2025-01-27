@@ -1,18 +1,9 @@
-﻿using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Drawing.Processing;
-using SixLabors.ImageSharp.Processing;
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
-using static System.Net.Mime.MediaTypeNames;
-using Color = SixLabors.ImageSharp.Color;
-using Image = SixLabors.ImageSharp.Image;
-using Rectangle = SixLabors.ImageSharp.Rectangle;
+﻿
 
 namespace AIAgentTest.Services
 {
     using SixLabors.ImageSharp;
+    using SixLabors.ImageSharp.Drawing;
     using SixLabors.ImageSharp.Drawing.Processing;
     using SixLabors.ImageSharp.Processing;
     using System;
@@ -21,6 +12,12 @@ namespace AIAgentTest.Services
     using System.IO;
     using System.Numerics;
     using System.Runtime.InteropServices;
+    using System.Text.RegularExpressions;
+    using System.Xml;
+    using Color = SixLabors.ImageSharp.Color;
+    using Image = SixLabors.ImageSharp.Image;
+    using Path = System.IO.Path;
+    using Rectangle = SixLabors.ImageSharp.Rectangle;
     using System.Text.RegularExpressions;
 
     public static class ImageService
@@ -62,6 +59,115 @@ namespace AIAgentTest.Services
                 // Open the image with the default viewer
                 OpenImageWithDefaultViewer(outputPath);
             }
+        }
+
+
+        public static string GetImageWithMolmoPoints(string imagePath, string molmoPointsXml)
+        {
+            using (Image image = Image.Load(imagePath))
+            {
+                var points = ParseMolmoPoints(molmoPointsXml, image.Width, image.Height);
+
+                // Extract the point name (assuming it's the inner text of the <points> element)
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(molmoPointsXml);
+                var node = xmlDoc.SelectSingleNode("//points") ?? xmlDoc.SelectSingleNode("//point");
+                string pointName = node?.InnerText?.Trim() ?? "default";
+
+                // Sanitize the point name for use in a file name
+                pointName = Regex.Replace(pointName, @"[^\w\d\s-_]", "_");
+
+                // Calculate the scaling factor based on the displayed size
+                const float maxDisplayedSize = 200f; // Max display size (width or height)
+                float scaleFactor = Math.Min(maxDisplayedSize / image.Width, maxDisplayedSize / image.Height);
+
+                foreach (var point in points)
+                {
+                    // Define the base radius for a 200x200 image
+                    float baseRadius = 2;
+
+                    // Scale the radius dynamically based on the image resolution
+                    float radius = baseRadius / scaleFactor;
+
+                    // Create an ellipse (circle) shape for each point
+                    var circle = new EllipsePolygon(point.X, point.Y, radius);
+
+                    // Draw the circle on the image
+                    image.Mutate(ctx => ctx.Fill(Color.Red, circle));
+                }
+
+                // Construct the output file path with the sanitized point name
+                string outputFileName = $"{Path.GetFileNameWithoutExtension(imagePath)}_{pointName.Normalize().Replace(" ", "_")}_with_molmo_points.png";
+                string outputPath = Path.Combine(Path.GetDirectoryName(imagePath), outputFileName);
+
+                image.Save(outputPath);
+
+                Console.WriteLine($"Image with Molmo points saved to: {outputPath}");
+                return outputPath;
+            }
+        }
+
+
+        public static List<Vector2> ParseMolmoPoints(string molmoPointsXml, int imageWidth, int imageHeight)
+        {
+            var points = new List<Vector2>();
+            var xmlDoc = new XmlDocument();
+
+            try
+            {
+                xmlDoc.LoadXml(molmoPointsXml);
+
+                // Check for <points> (plural) node
+                var pointsNode = xmlDoc.SelectSingleNode("//points");
+                if (pointsNode != null && pointsNode.Attributes != null)
+                {
+                    foreach (XmlAttribute attribute in pointsNode.Attributes)
+                    {
+                        // Process attributes like x1, y1, x2, y2 dynamically
+                        if (attribute.Name.StartsWith("x") && int.TryParse(attribute.Name.Substring(1), out int indexX))
+                        {
+                            string yAttrName = "y" + indexX;
+                            var yAttribute = pointsNode.Attributes[yAttrName];
+
+                            if (yAttribute != null &&
+                                float.TryParse(attribute.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float xValue) &&
+                                float.TryParse(yAttribute.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float yValue))
+                            {
+                                float x = xValue * imageWidth / 100;
+                                float y = yValue * imageHeight / 100;
+                                points.Add(new Vector2(x, y));
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Check for a single <point> (singular) node
+                    var pointNode = xmlDoc.SelectSingleNode("//point");
+                    if (pointNode != null &&
+                        pointNode.Attributes["x"] != null &&
+                        pointNode.Attributes["y"] != null)
+                    {
+                        if (float.TryParse(pointNode.Attributes["x"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float xValue) &&
+                            float.TryParse(pointNode.Attributes["y"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float yValue))
+                        {
+                            float x = xValue * imageWidth / 100;
+                            float y = yValue * imageHeight / 100;
+                            points.Add(new Vector2(x, y));
+                        }
+                    }
+                }
+            }
+            catch (XmlException ex)
+            {
+                Console.WriteLine($"Error parsing XML: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unexpected error: {ex.Message}");
+            }
+
+            return points;
         }
 
         public static Vector2 GetImageSize(string imagePath)

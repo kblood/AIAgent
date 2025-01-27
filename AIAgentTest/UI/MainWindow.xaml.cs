@@ -302,9 +302,15 @@ namespace AIAgentTest.UI
                     var response = await _openedAI_VisionClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
                     //var response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
                     AppendImageToConversation(SelectedImagePath);
-                    SelectedImagePath = null;
+                    
                     fullResponse = response;
                     ProcessAndDisplayMessageWithCode(response);
+                    if(response.Contains("<point"))
+                    {
+                        var molmoImage = ImageService.GetImageWithMolmoPoints(SelectedImagePath, response);
+                        AppendImageToConversation(molmoImage);
+                    }
+                    SelectedImagePath = null;
                 }
                 else
                 {
@@ -547,14 +553,23 @@ namespace AIAgentTest.UI
 
         private void AppendImageToConversation(string imagePath)
         {
+            string absolutePath = Path.GetFullPath(imagePath);
             var paragraph = new Paragraph();
             var image = new System.Windows.Controls.Image
             {
-                Source = new BitmapImage(new Uri(imagePath)),
+                Source = new BitmapImage(new Uri(absolutePath)),
                 MaxHeight = 200,
                 MaxWidth = 200,
                 Stretch = Stretch.Uniform
             };
+
+            //var image = new System.Windows.Controls.Image
+            //{
+            //    Source = new BitmapImage(new Uri(imagePath)),
+            //    MaxHeight = 200,
+            //    MaxWidth = 200,
+            //    Stretch = Stretch.Uniform
+            //};
 
             var container = new InlineUIContainer(image);
             paragraph.Inlines.Add(container);
