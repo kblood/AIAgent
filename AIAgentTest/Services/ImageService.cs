@@ -40,7 +40,6 @@ namespace AIAgentTest.Services
             }
         }
 
-
         public static void DisplayImageWithBox(string imagePath, string coordinates)
         {
             using (Image image = Image.Load(imagePath))

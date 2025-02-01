@@ -283,18 +283,20 @@ namespace AIAgentTest.UI
 
             try
             {
+                string newChatMessage = "";
+                if (!ConversationBox.ToString().EndsWith("\n") && !ConversationBox.ToString().EndsWith("\n\r"))
+                {
+                    newChatMessage += AppendToConversation("\n", null);
+                }
+                newChatMessage += AppendToConversation($"User: {InputText}\n", null);
+
                 // 1) Add user message to session
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
                     Role = "User",
-                    Content = InputText,
+                    Content = newChatMessage,
                     ImagePath = HasSelectedImage ? SelectedImagePath : null
                 });
-                if(!ConversationBox.ToString().EndsWith("\n") && !ConversationBox.ToString().EndsWith("\n\r"))
-                {
-                    AppendToConversation("\n", null);
-                }
-                AppendToConversation($"User: {InputText}\n", null);
 
                 string fullResponse = "";
                 if (HasSelectedImage)
@@ -309,8 +311,9 @@ namespace AIAgentTest.UI
                     {
                         var molmoImage = ImageService.GetImageWithMolmoPoints(SelectedImagePath, response);
                         AppendImageToConversation(molmoImage);
+                        SelectedImagePath = molmoImage;
                     }
-                    SelectedImagePath = null;
+                    //SelectedImagePath = null;
                 }
                 else
                 {
@@ -484,7 +487,8 @@ namespace AIAgentTest.UI
                 CurrentSession.Messages.Add(new Models.ChatMessage
                 {
                     Role = SelectedModel,
-                    Content = fullResponse
+                    Content = fullResponse,
+                    ImagePath = HasSelectedImage ? SelectedImagePath : null
                 });
 
                 // Optionally set debug output
@@ -558,8 +562,8 @@ namespace AIAgentTest.UI
             var image = new System.Windows.Controls.Image
             {
                 Source = new BitmapImage(new Uri(absolutePath)),
-                MaxHeight = 200,
-                MaxWidth = 200,
+                MaxHeight = 400,
+                MaxWidth = 400,
                 Stretch = Stretch.Uniform
             };
 
@@ -610,9 +614,9 @@ namespace AIAgentTest.UI
             AppendToConversation("\n", null);
         }
 
-        private void AppendToConversation(string text, FontFamily fontFamily = null)
+        private string AppendToConversation(string text, FontFamily fontFamily = null)
         {
-            if (string.IsNullOrEmpty(text)) return;
+            if (string.IsNullOrWhiteSpace(text)) return "";
 
             var paragraph = ConversationBox.Document.Blocks.LastBlock as Paragraph;
             if (paragraph == null)
@@ -629,6 +633,7 @@ namespace AIAgentTest.UI
 
             paragraph.Inlines.Add(run);
             ConversationBox.ScrollToEnd();
+            return text;
         }
 
         private void AddCodeLink(string language, string code)
