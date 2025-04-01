@@ -5,15 +5,16 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:AIAgentTest.Views"
         mc:Ignorable="d"
-        Title="MVVM Test Window" Height="800" Width="1200">
+        Title="MVVM Test Window" Height="800" Width="1200"
+        Background="{DynamicResource WindowBackground}">
     
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Window.Resources>
     
-    <DockPanel>
+    <DockPanel Background="{DynamicResource WindowBackground}">
         <!-- Menu -->
-        <Menu DockPanel.Dock="Top">
+        <Menu DockPanel.Dock="Top" Style="{StaticResource MainMenu}">
             <MenuItem Header="_File">
                 <MenuItem Header="_Export Code..." Command="{Binding CodeVM.ExportCodeCommand}"/>
                 <Separator/>

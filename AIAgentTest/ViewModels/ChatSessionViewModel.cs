@@ -94,6 +94,7 @@ namespace AIAgentTest.ViewModels
         public Action<string> AppendTextAction { get; set; }
         public Action<string, string> HandleCodeAction { get; set; }
         public Action<string> AppendImageAction { get; set; }
+        public Action ClearConversationAction { get; set; }
         
         public ChatSessionViewModel(
             ILLMClientService llmClientService,
@@ -299,28 +300,34 @@ namespace AIAgentTest.ViewModels
         {
             if (CurrentSession == null) return;
             
+            // Clear conversation display
+            ClearConversationAction?.Invoke();
+            
             // Clear context
             _contextManager.ClearContext();
             
             // Process each message
-            foreach (var message in CurrentSession.Messages)
+            if (CurrentSession.Messages != null && CurrentSession.Messages.Count > 0)
             {
-                // Add to context
-                _contextManager.AddMessage(message.Role, message.Content);
-                
-                // Display role
-                AppendTextAction?.Invoke($"{message.Role}: ");
-                
-                // Process message content
-                _messageParsingService.ProcessMessage(
-                    message.Content,
-                    text => AppendTextAction?.Invoke(text),
-                    (language, code) => HandleCodeAction?.Invoke(language, code));
-                
-                // Display image if present
-                if (!string.IsNullOrEmpty(message.ImagePath) && File.Exists(message.ImagePath))
+                foreach (var message in CurrentSession.Messages)
                 {
-                    AppendImageAction?.Invoke(message.ImagePath);
+                    // Add to context
+                    _contextManager.AddMessage(message.Role, message.Content);
+                    
+                    // Display role
+                    AppendTextAction?.Invoke($"{message.Role}: ");
+                    
+                    // Process message content
+                    _messageParsingService.ProcessMessage(
+                        message.Content,
+                        text => AppendTextAction?.Invoke(text),
+                        (language, code) => HandleCodeAction?.Invoke(language, code));
+                    
+                    // Display image if present
+                    if (!string.IsNullOrEmpty(message.ImagePath) && File.Exists(message.ImagePath))
+                    {
+                        AppendImageAction?.Invoke(message.ImagePath);
+                    }
                 }
             }
         }

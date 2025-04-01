@@ -27,6 +27,7 @@ namespace AIAgentTest.Views
                 oldVM.AppendTextAction = null;
                 oldVM.HandleCodeAction = null;
                 oldVM.AppendImageAction = null;
+                oldVM.ClearConversationAction = null;
             }
             
             if (e.NewValue is ChatSessionViewModel newVM)
@@ -35,6 +36,7 @@ namespace AIAgentTest.Views
                 newVM.AppendTextAction = AppendText;
                 newVM.HandleCodeAction = AddCodeLink;
                 newVM.AppendImageAction = AppendImage;
+                newVM.ClearConversationAction = ClearConversation;
             }
         }
         
@@ -117,6 +119,12 @@ namespace AIAgentTest.Views
             paragraph.Inlines.Add(link);
             ConversationBox.Document.Blocks.Add(paragraph);
             ConversationBox.ScrollToEnd();
+        }
+        
+        private void ClearConversation()
+        {
+            // Clear the RichTextBox content
+            ConversationBox.Document = new FlowDocument();
         }
         
         private void CodeLink_Click(object sender, RoutedEventArgs e)

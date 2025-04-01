@@ -41,19 +41,27 @@ namespace AIAgentTest.Services
                 resources["HyperlinkColor"] = new SolidColorBrush(Color.FromRgb(0, 102, 204));
                 resources["MenuItemSelectedBackground"] = new SolidColorBrush(Color.FromRgb(229, 229, 229));
                 resources["ComboBoxBackground"] = new SolidColorBrush(Colors.White);
+                resources["ScrollBarBackground"] = new SolidColorBrush(Color.FromRgb(240, 240, 240));
+                resources["ScrollBarThumbBackground"] = new SolidColorBrush(Color.FromRgb(205, 205, 205));
+                resources["CodeBackground"] = new SolidColorBrush(Color.FromRgb(248, 248, 248));
+                resources["AccentColor"] = new SolidColorBrush(Color.FromRgb(0, 122, 204));
             }
             else
             {
                 // Set dark theme colors
-                resources["WindowBackground"] = new SolidColorBrush(Color.FromRgb(45, 45, 45));
-                resources["TextColor"] = new SolidColorBrush(Colors.White);
-                resources["MenuBackground"] = new SolidColorBrush(Color.FromRgb(30, 30, 30));
-                resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(64, 64, 64));
-                resources["ControlBackground"] = new SolidColorBrush(Color.FromRgb(61, 61, 61));
-                resources["SelectionBackground"] = new SolidColorBrush(Color.FromRgb(38, 79, 120));
-                resources["HyperlinkColor"] = new SolidColorBrush(Color.FromRgb(86, 156, 214));
-                resources["MenuItemSelectedBackground"] = new SolidColorBrush(Color.FromRgb(64, 64, 64));
-                resources["ComboBoxBackground"] = new SolidColorBrush(Color.FromRgb(61, 61, 61));
+                resources["WindowBackground"] = new SolidColorBrush(Color.FromRgb(33, 33, 33));
+                resources["TextColor"] = new SolidColorBrush(Color.FromRgb(240, 240, 240));
+                resources["MenuBackground"] = new SolidColorBrush(Color.FromRgb(24, 24, 24));
+                resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(70, 70, 70));
+                resources["ControlBackground"] = new SolidColorBrush(Color.FromRgb(50, 50, 50));
+                resources["SelectionBackground"] = new SolidColorBrush(Color.FromRgb(0, 120, 215));
+                resources["HyperlinkColor"] = new SolidColorBrush(Color.FromRgb(77, 179, 255));
+                resources["MenuItemSelectedBackground"] = new SolidColorBrush(Color.FromRgb(66, 66, 66));
+                resources["ComboBoxBackground"] = new SolidColorBrush(Color.FromRgb(50, 50, 50));
+                resources["ScrollBarBackground"] = new SolidColorBrush(Color.FromRgb(41, 41, 41));
+                resources["ScrollBarThumbBackground"] = new SolidColorBrush(Color.FromRgb(80, 80, 80));
+                resources["CodeBackground"] = new SolidColorBrush(Color.FromRgb(30, 30, 30));
+                resources["AccentColor"] = new SolidColorBrush(Color.FromRgb(0, 137, 255));
             }
             
             // Force theme update on all elements
@@ -68,6 +76,28 @@ namespace AIAgentTest.Services
             // Save setting
             Properties.Settings.Default.IsLightTheme = theme == ThemeType.Light;
             Properties.Settings.Default.Save();
+            
+            // Set system parameters
+            System.Windows.SystemParameters.StaticPropertyChanged -= SystemParameters_StaticPropertyChanged;
+            System.Windows.SystemParameters.StaticPropertyChanged += SystemParameters_StaticPropertyChanged;
+        }
+        
+        private void SystemParameters_StaticPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            // If a system color or parameter changes, we might need to update our resources
+            if (e.PropertyName == "MenuPopupAnimation" || e.PropertyName.StartsWith("MenuItem") || e.PropertyName.StartsWith("Menu"))
+            {
+                // Update menu-related resources
+                var resources = Application.Current.Resources;
+                if (CurrentTheme == ThemeType.Light)
+                {
+                    resources["MenuBackground"] = new SolidColorBrush(Colors.WhiteSmoke);
+                }
+                else
+                {
+                    resources["MenuBackground"] = new SolidColorBrush(Color.FromRgb(24, 24, 24));
+                }
+            }
         }
         
         private void RefreshControlsRecursively(DependencyObject parent)

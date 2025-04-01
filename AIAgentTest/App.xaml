@@ -17,6 +17,10 @@
             <SolidColorBrush x:Key="HyperlinkColor" Color="#0066CC"/>
             <SolidColorBrush x:Key="MenuItemSelectedBackground" Color="#E5E5E5"/>
             <SolidColorBrush x:Key="ComboBoxBackground" Color="White"/>
+            <SolidColorBrush x:Key="ScrollBarBackground" Color="#F0F0F0"/>
+            <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="#CDCDCD"/>
+            <SolidColorBrush x:Key="CodeBackground" Color="#F8F8F8"/>
+            <SolidColorBrush x:Key="AccentColor" Color="#007ACC"/>
             
             <!-- Converters -->
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>

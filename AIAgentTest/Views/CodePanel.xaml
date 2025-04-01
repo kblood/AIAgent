@@ -21,8 +21,7 @@
             <!-- Code Display Area -->
             <RichTextBox Grid.Row="1"
                          x:Name="CodeBox"
-                         Style="{StaticResource StandardRichTextBox}"
-                         FontFamily="Consolas">
+                         Style="{StaticResource CodeRichTextBox}">
                 <FlowDocument/>
             </RichTextBox>
             
