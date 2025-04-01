@@ -22,18 +22,18 @@
             <MenuItem Header="_View">
                 <MenuItem Header="Theme">
                     <MenuItem Header="Light" 
+                              Command="{Binding ToggleLightThemeCommand}"
                               IsCheckable="True"
-                              IsChecked="{Binding IsLightTheme}"
-                              Command="{Binding ToggleThemeCommand}"/>
+                              IsChecked="{Binding IsLightTheme}"/>
                     <MenuItem Header="Dark"
+                              Command="{Binding ToggleDarkThemeCommand}"
                               IsCheckable="True" 
-                              IsChecked="{Binding IsDarkTheme}"
-                              Command="{Binding ToggleThemeCommand}"/>
+                              IsChecked="{Binding IsDarkTheme, Mode=OneWay}"/>
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="Show _Debug Panel" 
                           IsCheckable="True" 
-                          IsChecked="{Binding DebugVM.IsVisible}"
+                          IsChecked="{Binding DebugVM.IsVisible, Mode=TwoWay}"
                           Command="{Binding ToggleDebugCommand}"/>
                 <MenuItem Header="Show _Model Selection" 
                           IsCheckable="True"

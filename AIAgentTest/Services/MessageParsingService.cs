@@ -28,7 +28,7 @@ namespace AIAgentTest.Services
                 string code = match.Groups[2].Success ? match.Groups[2].Value : match.Groups[4].Value;
 
                 codeCallback(language, code.Trim());
-                CodeExtracted?.Invoke(this, new CodeExtractedEventArgs(code.Trim(), language));
+                OnCodeExtracted(code.Trim(), language);
 
                 lastIndex = match.Index + match.Length;
             }
@@ -70,6 +70,12 @@ namespace AIAgentTest.Services
             }
 
             return results;
+        }
+        
+        // Added for testing purposes
+        public void OnCodeExtracted(string code, string language)
+        {
+            CodeExtracted?.Invoke(this, new CodeExtractedEventArgs(code, language));
         }
     }
 }

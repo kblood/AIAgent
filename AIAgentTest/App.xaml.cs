@@ -34,13 +34,6 @@ namespace AIAgentTest
                 var themeService = new ThemeService();
                 ServiceProvider.RegisterService<ThemeService>(themeService);
                 
-                // Register ViewModels
-                var codeViewModel = new CodeViewModel();
-                ServiceProvider.RegisterService<CodeViewModel>(codeViewModel);
-                
-                var debugViewModel = new DebugViewModel(contextManager);
-                ServiceProvider.RegisterService<DebugViewModel>(debugViewModel);
-                
                 var modelSelectionViewModel = new ModelSelectionViewModel(llmClientService);
                 ServiceProvider.RegisterService<ModelSelectionViewModel>(modelSelectionViewModel);
                 
@@ -50,6 +43,25 @@ namespace AIAgentTest
                     contextManager,
                     messageParsingService);
                 ServiceProvider.RegisterService<ChatSessionViewModel>(chatSessionViewModel);
+                
+                // Set initial model in ChatSessionViewModel
+                if (!string.IsNullOrEmpty(modelSelectionViewModel.SelectedModel))
+                {
+                    chatSessionViewModel.SelectedModel = modelSelectionViewModel.SelectedModel;
+                }
+                
+                // Register property change event for model selection
+                modelSelectionViewModel.PropertyChanged += (s, e) => {
+                    if (e.PropertyName == nameof(ModelSelectionViewModel.SelectedModel)) {
+                        chatSessionViewModel.SelectedModel = modelSelectionViewModel.SelectedModel;
+                    }
+                };
+                
+                var codeViewModel = new CodeViewModel();
+                ServiceProvider.RegisterService<CodeViewModel>(codeViewModel);
+                
+                var debugViewModel = new DebugViewModel(contextManager);
+                ServiceProvider.RegisterService<DebugViewModel>(debugViewModel);
                 
                 var mainViewModel = new MainViewModel(
                     themeService,
@@ -64,6 +76,17 @@ namespace AIAgentTest
                 System.Diagnostics.Debug.WriteLine($"Error initializing services: {ex.Message}");
                 // Don't crash the app if our services have issues
             }
+            
+            // Create and show the main window
+            var mainWindow = new Views.TestWindow();
+            mainWindow.DataContext = ServiceProvider.GetService<MainViewModel>();
+            mainWindow.Show();
+            Current.MainWindow = mainWindow;
+            
+#if DEBUG
+            // Run MVVM architecture tests in debug mode
+            Testing.MVVMTester.RunTests().ConfigureAwait(false);
+#endif
         }
 
         protected override void OnExit(ExitEventArgs e)

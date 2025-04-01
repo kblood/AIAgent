@@ -41,7 +41,8 @@ namespace AIAgentTest.ViewModels
         public ChatSessionViewModel ChatVM { get; }
         
         // Commands
-        public ICommand ToggleThemeCommand { get; }
+        public ICommand ToggleLightThemeCommand { get; }
+        public ICommand ToggleDarkThemeCommand { get; }
         public ICommand ToggleDebugCommand { get; }
         public ICommand ToggleModelSelectionCommand { get; }
         public ICommand ExitCommand { get; }
@@ -64,7 +65,8 @@ namespace AIAgentTest.ViewModels
             _isLightTheme = Properties.Settings.Default.IsLightTheme;
             
             // Initialize commands
-            ToggleThemeCommand = new RelayCommand(() => IsLightTheme = !IsLightTheme);
+            ToggleLightThemeCommand = new RelayCommand(() => IsLightTheme = true);
+            ToggleDarkThemeCommand = new RelayCommand(() => IsLightTheme = false);
             ToggleDebugCommand = new RelayCommand(() => DebugVM.IsVisible = !DebugVM.IsVisible);
             ToggleModelSelectionCommand = new RelayCommand(() => IsModelSelectionVisible = !IsModelSelectionVisible);
             ExitCommand = new RelayCommand(() => System.Windows.Application.Current.Shutdown());

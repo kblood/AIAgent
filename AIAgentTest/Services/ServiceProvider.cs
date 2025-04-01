@@ -29,6 +29,16 @@ namespace AIAgentTest.Services
             throw new InvalidOperationException($"Service of type {typeof(T).Name} is not registered.");
         }
         
+        public static object GetServiceByType(Type type)
+        {
+            if (_services.TryGetValue(type, out var service))
+            {
+                return service;
+            }
+            
+            throw new InvalidOperationException($"Service of type {type.Name} is not registered.");
+        }
+        
         public static void ClearServices()
         {
             foreach (var service in _services.Values)

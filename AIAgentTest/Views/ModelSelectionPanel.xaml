@@ -10,11 +10,14 @@
         <ComboBox Width="200" 
                   ItemsSource="{Binding AvailableModels}"
                   SelectedItem="{Binding SelectedModel}"
+                  Style="{StaticResource StandardComboBox}"
                   Margin="0,0,10,0"/>
         <Button Content="Refresh" 
                 Command="{Binding RefreshModelsCommand}"
+                Style="{StaticResource StandardButton}"
                 Margin="0,0,10,0"/>
         <Button Content="Settings"
-                Command="{Binding ShowModelSettingsCommand}"/>
+                Command="{Binding ShowModelSettingsCommand}"
+                Style="{StaticResource StandardButton}"/>
     </StackPanel>
 </UserControl>

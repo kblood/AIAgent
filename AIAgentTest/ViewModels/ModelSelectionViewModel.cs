@@ -36,6 +36,10 @@ namespace AIAgentTest.ViewModels
             
             _availableModels = new ObservableCollection<string>();
             
+            // Add default model at startup
+            _availableModels.Add("llama3"); // Default model if none available
+            _selectedModel = "llama3";
+            
             // Initialize commands
             RefreshModelsCommand = new RelayCommand(async () => await LoadModelsAsync());
             ShowModelSettingsCommand = new RelayCommand(ShowModelSettings);

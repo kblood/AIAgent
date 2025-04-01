@@ -5,89 +5,106 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:local="clr-namespace:AIAgentTest.Views"
              mc:Ignorable="d">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Border Style="{StaticResource CardPanel}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <!-- Chat Session Management Bar -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Text="Chat Sessions:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <ComboBox x:Name="SessionsComboBox" 
-                      Width="200" 
-                      ItemsSource="{Binding ChatSessions}"
-                      SelectedItem="{Binding CurrentSession}"
-                      DisplayMemberPath="Name"/>
-            <Button Content="New" 
-                    Command="{Binding NewSessionCommand}"
-                    Margin="10,0,0,0"
-                    Width="60"/>
-            <Button Content="Save" 
-                    Command="{Binding SaveSessionCommand}"
-                    Margin="5,0,0,0"
-                    Width="60"/>
-            <Button Content="Delete"
-                    Command="{Binding DeleteSessionCommand}"
-                    Margin="5,0,0,0"
-                    Width="60"/>
-        </StackPanel>
-        
-        <!-- Chat Conversation Area -->
-        <RichTextBox Grid.Row="1"
-                     x:Name="ConversationBox"
-                     IsReadOnly="True"
-                     VerticalScrollBarVisibility="Auto"
-                     Margin="0,0,0,10">
-            <RichTextBox.Resources>
-                <Style TargetType="Hyperlink">
-                    <Style.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Cursor" Value="Hand"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </RichTextBox.Resources>
-            <FlowDocument/>
-        </RichTextBox>
-        
-        <!-- Input Area -->
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+            <!-- Header -->
+            <TextBlock Grid.Row="0" 
+                       Text="Chat Interface" 
+                       Style="{StaticResource HeaderText}"/>
             
-            <Button Grid.Column="0"
-                    x:Name="AddImageButton"
-                    Width="30"
-                    Height="30"
-                    Margin="0,0,10,0"
-                    Click="AddImageButton_Click"
-                    ToolTip="Add image to prompt">
-                <TextBlock Text="+" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-            </Button>
+            <!-- Chat Session Management Bar -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="Chat Sessions:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ComboBox x:Name="SessionsComboBox" 
+                          Width="200" 
+                          ItemsSource="{Binding ChatSessions}"
+                          SelectedItem="{Binding CurrentSession}"
+                          DisplayMemberPath="Name"
+                          Style="{StaticResource StandardComboBox}"/>
+                <Button Content="New" 
+                        Command="{Binding NewSessionCommand}"
+                        Style="{StaticResource StandardButton}"
+                        Margin="10,0,0,0"
+                        Width="60"/>
+                <Button Content="Save" 
+                        Command="{Binding SaveSessionCommand}"
+                        Style="{StaticResource StandardButton}"
+                        Margin="5,0,0,0"
+                        Width="60"/>
+                <Button Content="Delete"
+                        Command="{Binding DeleteSessionCommand}"
+                        Style="{StaticResource StandardButton}"
+                        Margin="5,0,0,0"
+                        Width="60"/>
+            </StackPanel>
             
-            <Grid Grid.Column="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+            <!-- Chat Conversation Area -->
+            <RichTextBox Grid.Row="2"
+                         x:Name="ConversationBox"
+                         Style="{StaticResource StandardRichTextBox}"
+                         Margin="0,0,0,10">
+                <RichTextBox.Resources>
+                    <Style TargetType="Hyperlink">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </RichTextBox.Resources>
+                <FlowDocument/>
+            </RichTextBox>
+            
+            <!-- Input Area -->
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
                 
-                <TextBlock Grid.Row="0" 
-                           Text="{Binding SelectedImagePath}" 
-                           TextTrimming="CharacterEllipsis"
-                           Margin="0,0,0,5"
-                           Visibility="{Binding HasSelectedImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <Button Grid.Column="0"
+                        x:Name="AddImageButton"
+                        Width="30"
+                        Height="30"
+                        Margin="0,0,10,0"
+                        Click="AddImageButton_Click"
+                        Style="{StaticResource StandardButton}"
+                        ToolTip="Add image to prompt">
+                    <TextBlock Text="+" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
                 
-                <TextBox Grid.Row="1"
-                         x:Name="InputTextBox"
-                         Height="30"
-                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
-                         KeyDown="InputTextBox_KeyDown">
-                </TextBox>
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <TextBlock Grid.Row="0" 
+                               Text="{Binding SelectedImagePath}" 
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,0,5"
+                               Visibility="{Binding HasSelectedImage, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    
+                    <TextBox Grid.Row="1"
+                             x:Name="InputTextBox"
+                             Height="30"
+                             Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+                             KeyDown="InputTextBox_KeyDown"
+                             Background="{DynamicResource ControlBackground}"
+                             Foreground="{DynamicResource TextColor}"
+                             BorderBrush="{DynamicResource BorderColor}"
+                             Padding="5"
+                             Margin="5">
+                    </TextBox>
+                </Grid>
             </Grid>
         </Grid>
-    </Grid>
+    </Border>
 </UserControl>

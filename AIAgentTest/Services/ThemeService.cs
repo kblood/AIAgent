@@ -56,12 +56,37 @@ namespace AIAgentTest.Services
                 resources["ComboBoxBackground"] = new SolidColorBrush(Color.FromRgb(61, 61, 61));
             }
             
+            // Force theme update on all elements
+            foreach (Window window in Application.Current.Windows)
+            {
+                RefreshControlsRecursively(window);
+            }
+            
             // Notify subscribers
             ThemeChanged?.Invoke(this, theme);
             
             // Save setting
             Properties.Settings.Default.IsLightTheme = theme == ThemeType.Light;
             Properties.Settings.Default.Save();
+        }
+        
+        private void RefreshControlsRecursively(DependencyObject parent)
+        {
+            int childCount = VisualTreeHelper.GetChildrenCount(parent);
+            
+            for (int i = 0; i < childCount; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                
+                // Force the control to re-evaluate its templates and styles
+                if (child is FrameworkElement element)
+                {
+                    element.InvalidateVisual();
+                }
+                
+                // Recursively process all children
+                RefreshControlsRecursively(child);
+            }
         }
     }
 }

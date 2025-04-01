@@ -20,7 +20,7 @@ namespace AIAgentTest.API_Clients
         {
             _providerName = providerName;
             _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromMinutes(5);
+            _httpClient.Timeout = TimeSpan.FromMinutes(15);
             
             _jsonOptions = new JsonSerializerOptions
             {
