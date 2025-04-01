@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
+using System.Linq;
 using AIAgentTest.Properties;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -17,6 +18,11 @@ using AIAgentTest.Models;
 using AIAgentTest.Services;
 using System.Text.Json;
 using System.Text;
+using LangChain;
+using LangChain.Chains;
+using LangChain.Providers.Ollama;
+using LangChain.Providers;
+
 //using LLama;
 
 namespace AIAgentTest.UI
@@ -211,21 +217,34 @@ namespace AIAgentTest.UI
         {
             try
             {
+                // First, get available models
                 var models = await _ollamaClient.GetAvailableModelsAsync();
                 AvailableModels.Clear();
                 foreach (var model in models)
                 {
-                    AvailableModels.Add(model.Name);
+                    AvailableModels.Add(model);
                 }
 
-                var runningModels = await _ollamaClient.GetRunningModelsAsync();
-                if(runningModels != null && runningModels.Models.Count > 0)
-                {
-                    SelectedModel = runningModels.Models.First().Name;
+                // Try to get running models
+                try {
+                    var runningModels = await _ollamaClient.GetRunningModelsAsync();
+                    if(runningModels != null && runningModels.Any())
+                    {
+                        SelectedModel = runningModels.FirstOrDefault();
+                    }
+                    else if (AvailableModels.Count > 0)
+                    {
+                        SelectedModel = AvailableModels[0];
+                    }
                 }
-                else if (AvailableModels.Count > 0)
+                catch (Exception ex)
                 {
-                    SelectedModel = AvailableModels[0];
+                    Console.WriteLine($"Error getting running models: {ex.Message}");
+                    // Fall back to first available model if there's an error
+                    if (AvailableModels.Count > 0)
+                    {
+                        SelectedModel = AvailableModels[0];
+                    }
                 }
             }
             catch (Exception ex)
@@ -249,9 +268,9 @@ namespace AIAgentTest.UI
             _functionService.RegisterFunction(
                 "get_weather",
                 "Get the current weather for a location",
-                new Dictionary<string, ParameterDefinition>
+                new Dictionary<string, AIAgentTest.Services.ParameterDefinition>
                 {
-                    ["location"] = new ParameterDefinition
+                    ["location"] = new AIAgentTest.Services.ParameterDefinition
                     {
                         Type = "string",
                         Description = "The city name",
@@ -301,8 +320,8 @@ namespace AIAgentTest.UI
                 string fullResponse = "";
                 if (HasSelectedImage)
                 {
-                    var response = await _openedAI_VisionClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
-                    //var response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    //var response = await _openedAI_VisionClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
+                    var response = await _ollamaClient.GenerateResponseWithImageAsync(InputText, SelectedImagePath, SelectedModel);
                     AppendImageToConversation(SelectedImagePath);
                     
                     fullResponse = response;
@@ -317,7 +336,7 @@ namespace AIAgentTest.UI
                 }
                 else
                 {
-                    var functionDefinitions = _functionService.GetFunctionDefinitions();
+                    var functionDefinitions = _functionService.GetFunctionDefinitions2();
                     var prompt = _isContextEnabled
                         ? _contextManager.GetContextualPrompt(InputText)
                         : InputText;
@@ -334,6 +353,7 @@ namespace AIAgentTest.UI
                     ParserState parserState = ParserState.OutsideCodeBlock;
 
                     // We'll stream the response chunk-by-chunk
+                    //await foreach (var chunk in _ollamaClient.GenerateWithFunctionsAsync(prompt, SelectedModel, functionDefinitions))
                     await foreach (var chunk in _ollamaClient.GenerateStreamResponseAsync(prompt, SelectedModel))
                     {
                         // Update the UI inside the dispatcher
@@ -882,6 +902,19 @@ namespace AIAgentTest.UI
         {
             MessageBox.Show("Model settings dialog not implemented yet.", "Model Settings",
                           MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void OpenTestWindow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var testWindow = new Views.TestWindow();
+                testWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error opening test window: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void About_Click(object sender, RoutedEventArgs e)

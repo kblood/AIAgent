@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AIAgentTest.Models;
+using AIAgentTest.Services.Interfaces;
 
 namespace AIAgentTest.Services
 {
-    public class ChatSessionService
+    public class ChatSessionService : IChatSessionService
     {
         private readonly string _sessionsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Sessions");
 
@@ -23,7 +25,7 @@ namespace AIAgentTest.Services
             await File.WriteAllTextAsync(filePath, JsonSerializer.Serialize(session));
         }
 
-        public async Task<List<ChatSession>> LoadSessionsAsync()
+        public async Task<IEnumerable<ChatSession>> LoadSessionsAsync()
         {
             var sessions = new List<ChatSession>();
             foreach (var file in Directory.GetFiles(_sessionsDirectory, "*.json"))
@@ -38,17 +40,6 @@ namespace AIAgentTest.Services
             return sessions.OrderByDescending(s => s.UpdatedAt).ToList();
         }
 
-        public async Task<List<ChatSession>> ListSessionsAsync()
-        {
-            var sessions = new List<ChatSession>();
-            foreach (var file in Directory.GetFiles(_sessionsDirectory, "*.json"))
-            {
-                var json = await File.ReadAllTextAsync(file);
-                sessions.Add(JsonSerializer.Deserialize<ChatSession>(json));
-            }
-            return sessions;
-        }
-
         public async Task DeleteSessionAsync(ChatSession session)
         {
             var filePath = Path.Combine(_sessionsDirectory, $"{session.Id}.json");
@@ -56,6 +47,20 @@ namespace AIAgentTest.Services
             {
                 File.Delete(filePath);
             }
+        }
+
+        public async Task<ChatSession> CreateSessionAsync(string name, string modelName)
+        {
+            var session = new ChatSession
+            {
+                Name = name,
+                ModelName = modelName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            
+            await SaveSessionAsync(session);
+            return session;
         }
     }
 }

@@ -60,20 +60,20 @@ namespace AIAgentFramework
 
             //var installedmodels = LMStudioAgemt.ListInstalledModels();
             //var models = await LMStudioAgemt.ListLoadedModelsAsync();
-            var beforeInfo = await NvidiaSmiUtility.GetGPUInfoAsync();
+            var beforeInfo = await AIAgentTest.Services.NvidiaSmiUtility.GetGPUInfoAsync();
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
             var ollamaAgent = new OllamaClient();
             var availableModels = await ollamaAgent.GetAvailableModelsAsync();
-            var modelToUse = availableModels.Where(m => m.Name.Contains("falcon3:10b")).MaxBy(m => m.Size); //marco-o1:latest  falcon3:10b
-            //var modelToUse = availableModels.Where(m => m.Name.Contains("x/llama3.2-vision:11b")).MaxBy(m => m.Size); //marco-o1:latest
+            var modelToUse = availableModels.FirstOrDefault(m => m.Contains("falcon3:10b")); //marco-o1:latest  falcon3:10b
+            //var modelToUse = availableModels.FirstOrDefault(m => m.Contains("x/llama3.2-vision:11b")); //marco-o1:latest
 
-            //var modelToUse = availableModels.Where(m => m.Name.Contains("llama3.2:1b")).MaxBy(m => m.Size);
+            //var modelToUse = availableModels.FirstOrDefault(m => m.Contains("llama3.2:1b"));
             //
 
             await ChatPrompt(modelToUse);
 
-            //await ImageTests(ollamaAgent, availableModels.Where(m => m.Name.Contains("x/llama3.2-vision:11b")).MaxBy(m => m.Size));
+            //await ImageTests(ollamaAgent, availableModels.FirstOrDefault(m => m.Contains("x/llama3.2-vision:11b")));
             return;
             /*
             string imagePath = "E:/Billeder/LLM Test/MtGArena20240918.jpg";
@@ -120,19 +120,19 @@ namespace AIAgentFramework
             JsonSerializerUtility.SaveToFileAsync(response, Path.Combine(dirinfo.FullName, "summary.json"));
             */
 
-            var afterUsage = await NvidiaSmiUtility.GetGPUInfoAsync();
+            var afterUsage = await AIAgentTest.Services.NvidiaSmiUtility.GetGPUInfoAsync();
 
         }
 
-        private static async Task ChatPrompt(ModelInfo? model)
+        private static async Task ChatPrompt(string modelName)
         {
-            var gpuBeforeInfo = await NvidiaSmiUtility.GetGPUInfoAsync();
+            var gpuBeforeInfo = await AIAgentTest.Services.NvidiaSmiUtility.GetGPUInfoAsync();
             // Ollama tests
             var ollamaAgent = new OllamaClient();
             //Console.WriteLine("Ollama responses:");
             //var availableModels = await ollamaAgent.GetAvailableModelsAsync();
             //ModelInfo? model = availableModels.Where(m => m.Name.ToLower().Contains(modelName)).MaxBy(m => m.Size);
-            Console.WriteLine($"Model: {model.Name}, Family: {model.Details.Family}");
+            Console.WriteLine($"Model: {modelName}");
             Console.WriteLine($"To exist the prompt, type exit.");
             var startTimeOllamaAgent = DateTime.Now;
             string prompt = "";
@@ -140,7 +140,7 @@ namespace AIAgentFramework
             while (!prompt.ToLower().Contains("exit"))
             {
                 var startTime = DateTime.Now;
-                var ollamaResponse = await ollamaAgent.GenerateTextResponseAsync(prompt, model.Name);
+                var ollamaResponse = await ollamaAgent.GenerateTextResponseAsync(prompt, modelName);
                 var endTime = DateTime.Now;
                 //Console.WriteLine($"Question: {question}");
                 Console.WriteLine($"Ollama response (took {(endTime - startTime).TotalSeconds} seconds):");
@@ -187,15 +187,15 @@ namespace AIAgentFramework
             var ollamaAgent = new OllamaClient();
             Console.WriteLine("Ollama responses:");
             var availableModels = await ollamaAgent.GetAvailableModelsAsync();
-            var model = availableModels.Where(m => m.Name.Contains("llama3.2:latest")).MaxBy(m => m.Size);
+            var model = availableModels.FirstOrDefault(m => m.Contains("llama3.2:latest"));
             var startTimeOllamaAgent = DateTime.Now;
             //foreach (var model in availableModels.Where(m => m.Name.Contains("llama3.2:latest")).MaxBy(m => m.Size))
             {
-                Console.WriteLine($"Model: {model.Name}, Family: {model.Details.Family}");
+                Console.WriteLine($"Model: {model}");
                 foreach (var question in questions)
                 {
                     var startTime = DateTime.Now;
-                    var ollamaResponse = await ollamaAgent.GenerateTextResponseAsync(question, model.Name);
+                    var ollamaResponse = await ollamaAgent.GenerateTextResponseAsync(question, model);
                     var endTime = DateTime.Now;
                     Console.WriteLine($"Question: {question}");
                     Console.WriteLine($"Ollama response (took {(endTime - startTime).TotalSeconds} seconds):");
@@ -207,7 +207,7 @@ namespace AIAgentFramework
             Console.WriteLine($"Ollama total elapsed time: {(endTimeOllamaAgent - startTimeOllamaAgent).TotalSeconds} seconds");
         }
 
-        private static async Task ImageTests(OllamaClient ollamaAgent, ModelInfo? modelToUse)
+        private static async Task ImageTests(OllamaClient ollamaAgent, string modelToUse)
         {
             //string imagePath = "E:\\Billeder\\Hjemmet\\LejlighedAarestrupsvej38stth.jpg";
             //string imagePath = "e:\\Billeder\\Rene\\Fede Baggrunde\\IMG_3131.JPG";
@@ -235,7 +235,7 @@ namespace AIAgentFramework
             //$"\r\nExplain your reasoning for choosing these coordinates.";
             while (!prompt.Contains("exit"))
             {
-                var imagedescription = await ollamaAgent.GenerateResponseWithImageAsync(prompt, imagePath, modelToUse.Name);
+                var imagedescription = await ollamaAgent.GenerateResponseWithImageAsync(prompt, imagePath, modelToUse);
                 Console.WriteLine(imagedescription);
                 Console.WriteLine("Enter a new prompt or type 'exit' to quit.");
                 prompt = Console.ReadLine();

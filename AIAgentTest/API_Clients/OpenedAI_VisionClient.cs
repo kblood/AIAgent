@@ -51,8 +51,8 @@ namespace AIAgentTest.API_Clients
             };
 
             var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-            //var response = await _httpClient.PostAsync($"{_baseUrl}/api/generate", content);
-            var response = await _httpClient.PostAsync($"{_baseUrl}/chat/completions", content);
+            var response = await _httpClient.PostAsync($"{_baseUrl}/api/generate", content);
+            //var response = await _httpClient.PostAsync($"{_baseUrl}/chat/completions", content);
 
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();

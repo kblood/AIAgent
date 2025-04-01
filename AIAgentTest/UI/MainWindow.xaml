@@ -226,6 +226,9 @@
                 <MenuItem Header="Show Current Context"
                           Click="ShowCurrentContext_Click"/>
             </MenuItem>
+            <MenuItem Header="_Development">
+                <MenuItem Header="Open MVVM _Test Window" Click="OpenTestWindow_Click"/>
+            </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_About..." Click="About_Click"/>
             </MenuItem>

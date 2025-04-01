@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
+namespace AIAgentTest.Services
+{
 public class NvidiaSmiUtility
 {
     public static async Task<GPUInfo> GetGPUInfoAsync()
@@ -81,4 +83,5 @@ public class GPUProcess
     public int PID { get; set; }
     public string Type { get; set; }
     public string Name { get; set; }
+}
 }

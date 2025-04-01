@@ -1,50 +1,51 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using AIAgentTest.Services;
 using System.Threading.Tasks;
-using HtmlAgilityPack;
-using HtmlDocument = HtmlAgilityPack.HtmlDocument;
-using System.Diagnostics;
 
 namespace AIAgentTest.API_Clients
 {
-    public class OllamaClient
+    /// <summary>
+    /// Client for interacting with Ollama's API
+    /// </summary>
+    public class OllamaClient : BaseLLMClient
     {
-        private readonly HttpClient _httpClient;
         private readonly string _ollamaBaseUrl;
 
-        public OllamaClient(string ollamaBaseUrl = "http://localhost:11434")
+        /// <summary>
+        /// Initializes a new instance of the OllamaClient
+        /// </summary>
+        /// <param name="ollamaBaseUrl">The base URL for the Ollama API (default: http://localhost:11434)</param>
+        public OllamaClient(string ollamaBaseUrl = "http://localhost:11434") 
+            : base("Ollama")
         {
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromMinutes(5);
             _ollamaBaseUrl = ollamaBaseUrl;
         }
 
-        public async Task<string> GenerateTextResponseAsync(string prompt, string model = "llama3")
+        /// <summary>
+        /// Generates a text response from the specified model
+        /// </summary>
+        public override async Task<string> GenerateTextResponseAsync(string prompt, string model = null)
         {
+            model ??= "llama3"; // Default model if none specified
+            
             var responseJson = await GenerateResponseAsync(prompt, model);
             var responseText = ExtractPlainTextResponse(responseJson);
 
             return responseText;
         }
 
-        /*
-         
-         Formula: Size of KV cache per token in bytes = 2 * (num_layers) * (num_heads * dim_head) *  precision_in_bytes. (Stick this message pls, i'm tired of searching for it)
-
-From Ollama: 
-// fp16 k,v = sizeof(float16) * n_ctx * n_layer * (n_embd_head_k + n_embd_head_v) * n_head_kv
-
-var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().EmbeddingHeadCountK() + ggml.KV().EmbeddingHeadCountV()) * ggml.KV().HeadCountKV()
-         */
-
-        public async IAsyncEnumerable<string> GenerateStreamResponseAsync(string prompt, string model)
+        /// <summary>
+        /// Generates a text response as a stream of tokens
+        /// </summary>
+        public override async IAsyncEnumerable<string> GenerateStreamResponseAsync(string prompt, string model = null)
         {
+            model ??= "llama3"; // Default model if none specified
+            
             var request = new
             {
                 model = model,
@@ -87,120 +88,13 @@ var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().Em
             }
         }
 
-        public async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
+        /// <summary>
+        /// Processes an image with a vision-capable model
+        /// </summary>
+        public override async Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string model = null)
         {
-            var request = new
-            {
-                model = model,
-                //prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, new JsonSerializerOptions { WriteIndented = true })}",
-                prompt = $"{prompt}",
-                //system = "You are an AI assistant that can call functions. If you need to use a function and the function is available, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally."
-                //,
-                options = new
-                {
-                    num_ctx = 2048,  // Your custom context size
-                    //num_gpu = 1,      // Ensure GPU usage
-                    main_gpu = 0,     // Primary GPU device
-                    low_vram = false, // Disable low VRAM mode
-                    use_mmap = true,  // Enable memory mapping
-                    use_mlock = false // Disable memory locking
-                }
-            };
-
-            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
-
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-
-            var stats = ExtractResponseStats(responseContent);
-
-            return ExtractPlainTextResponse(responseContent);
-        }
-
-        public string ExtractPlainTextResponse(string jsonLines)
-        {
-            var responseBuilder = new StringBuilder();
-
-            foreach (var line in jsonLines.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                try
-                {
-                    using (JsonDocument doc = JsonDocument.Parse(line))
-                    {
-                        JsonElement root = doc.RootElement;
-                        if (root.TryGetProperty("response", out JsonElement responseElement))
-                        {
-                            responseBuilder.Append(responseElement.GetString());
-                        }
-                    }
-                }
-                catch (JsonException ex)
-                {
-                    Console.WriteLine($"Failed to parse JSON: {ex.Message}");
-                }
-            }
-
-            return responseBuilder.ToString();
-        }
-
-        public Dictionary<string,string> ExtractResponseStats(string jsonLines)
-        {
-            try
-            {
-                Dictionary<string, string> responseStats = new Dictionary<string, string>();
-
-                foreach (var line in jsonLines.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    try
-                    {
-                        using (JsonDocument doc = JsonDocument.Parse(line))
-                        {
-                            JsonElement root = doc.RootElement;
-                            if (root.TryGetProperty("done_reason", out JsonElement responseElement))
-                            {
-                                responseStats.Add("done_reason", responseElement.GetString());
-                            }
-                            if (root.TryGetProperty("total_duration", out responseElement))
-                            {
-                                //responseStats.Add("total_duration", responseElement.GetInt32().ToString());
-                                responseStats.Add("total_duration", responseElement.ToString());
-                            }
-                            if (root.TryGetProperty("prompt_eval_count", out responseElement))
-                            {
-                                responseStats.Add("prompt_eval_count", responseElement.GetInt32().ToString());
-                            }
-                            if (root.TryGetProperty("prompt_eval_duration", out responseElement))
-                            {
-                                responseStats.Add("prompt_eval_duration", responseElement.GetInt32().ToString());
-                            }
-                            if (root.TryGetProperty("eval_count", out responseElement))
-                            {
-                                responseStats.Add("eval_count", responseElement.GetInt32().ToString());
-                            }
-                            if (root.TryGetProperty("eval_duration", out responseElement))
-                            {
-                                responseStats.Add("eval_duration", responseElement.GetInt32().ToString());
-                            }
-                        }
-                    }
-                    catch (JsonException ex)
-                    {
-                        Console.WriteLine($"Failed to parse JSON: {ex.Message}");
-                    }
-                }
-
-                return responseStats;
-            }
-            catch
-            {
-                return null;
-            }
-
-        }
-
-        public async Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string model = "x/llama3.2-vision:11b")
-        {
+            model ??= "x/llama3.2-vision:11b"; // Default vision model
+            
             byte[] imageBytes = await File.ReadAllBytesAsync(imagePath);
             string base64Image = Convert.ToBase64String(imageBytes);
 
@@ -220,7 +114,150 @@ var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().Em
             return textResponse;
         }
 
-        public async Task<string> GenerateResponseAsync(string prompt, string model = "llama3")
+        /// <summary>
+        /// Gets a list of available models from Ollama
+        /// </summary>
+        public override async Task<List<string>> GetAvailableModelsAsync()
+        {
+            var response = await _httpClient.GetAsync($"{_ollamaBaseUrl}/api/tags");
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+            
+            var modelList = JsonSerializer.Deserialize<OllamaModelList>(content, _jsonOptions);
+            return modelList?.Models?.Select(m => m.Name).ToList() ?? new List<string>();
+        }
+
+        /// <summary>
+        /// Gets detailed information about a specific model
+        /// </summary>
+        public override async Task<ModelInfo> GetModelInfoAsync(string modelName)
+        {
+            var response = await _httpClient.GetAsync($"{_ollamaBaseUrl}/api/tags");
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+            
+            var modelList = JsonSerializer.Deserialize<OllamaModelList>(content, _jsonOptions);
+            var ollamaModel = modelList?.Models?.FirstOrDefault(m => m.Name == modelName);
+            
+            if (ollamaModel == null)
+            {
+                throw new ArgumentException($"Model '{modelName}' not found in available models");
+            }
+            
+            var modelInfo = new ModelInfo
+            {
+                Name = ollamaModel.Name,
+                Provider = "Ollama",
+                Size = ollamaModel.Size,
+                Family = ollamaModel.Details?.Family
+            };
+            
+            // Add capabilities based on model family/type
+            if (ollamaModel.Name.Contains("vision"))
+            {
+                modelInfo.Capabilities["vision"] = true;
+            }
+            
+            // Add metadata
+            if (ollamaModel.Details != null)
+            {
+                modelInfo.Metadata["format"] = ollamaModel.Details.Format;
+                modelInfo.Metadata["parameter_size"] = ollamaModel.Details.ParameterSize;
+                modelInfo.Metadata["quantization_level"] = ollamaModel.Details.QuantizationLevel;
+            }
+            
+            return modelInfo;
+        }
+
+        /// <summary>
+        /// Generates a response using the function calling capability
+        /// </summary>
+        public override async Task<string> GenerateWithFunctionsAsync(string prompt, string model, List<FunctionDefinition> functions)
+        {
+            var request = new
+            {
+                model = model,
+                prompt = $"{prompt}\n\nAvailable functions:\n{JsonSerializer.Serialize(functions, _jsonOptions)}",
+                system = "You are an AI assistant that can call functions. If you need to use a function and the function is available, respond with a JSON object containing 'name' and 'arguments'. Otherwise, respond normally.",
+                options = new
+                {
+                    num_ctx = 2048 * 4,
+                    low_vram = false,
+                    use_mmap = true,
+                    use_mlock = false,
+                    use_kv_cache = true
+                }
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
+
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            return ExtractPlainTextResponse(responseContent);
+        }
+
+        /// <summary>
+        /// Loads a model into Ollama
+        /// </summary>
+        public override async Task LoadModelAsync(string modelName)
+        {
+            var request = new { name = modelName };
+            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/pull", content);
+            response.EnsureSuccessStatusCode();
+        }
+
+        /// <summary>
+        /// Gets a list of models that are currently loaded in memory
+        /// </summary>
+        public async Task<List<string>> GetLoadedModelsAsync()
+        {
+            var availableModels = await GetAvailableModelsAsync();
+            var loadedModels = new List<string>();
+
+            foreach (var model in availableModels)
+            {
+                var request = new { name = model };
+                var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/show", content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    loadedModels.Add(model);
+                }
+            }
+
+            return loadedModels;
+        }
+
+        /// <summary>
+        /// Gets information about running models
+        /// </summary>
+        public async Task<List<string>> GetRunningModelsAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"{_ollamaBaseUrl}/api/ps");
+                response.EnsureSuccessStatusCode();
+                var content = await response.Content.ReadAsStringAsync();
+                
+                var modelList = JsonSerializer.Deserialize<OllamaModelList>(content, _jsonOptions);
+                return modelList?.Models?.Select(m => m.Name).ToList() ?? new List<string>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting running models: {ex.Message}");
+                return new List<string>();
+            }
+        }
+
+        /// <summary>
+        /// Private helper method to generate a response from Ollama
+        /// </summary>
+        private async Task<string> GenerateResponseAsync(string prompt, string model)
         {
             var request = new
             {
@@ -233,217 +270,83 @@ var kv uint64 = 2 * uint64(opts.NumCtx) * ggml.KV().BlockCount() * (ggml.KV().Em
 
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
-            // Parse the response and extract the generated text
-            // This is a simplified example and may need adjustment based on Ollama's exact response format
+            
             return responseContent;
         }
 
-        public async Task<List<ModelInfo>> GetAvailableModelsAsync()
+        /// <summary>
+        /// Gets response statistics from Ollama
+        /// </summary>
+        public Dictionary<string, string> ExtractResponseStats(string jsonLines)
         {
-            var response = await _httpClient.GetAsync($"{_ollamaBaseUrl}/api/tags");
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            var options = new JsonSerializerOptions
+            try
             {
-                PropertyNameCaseInsensitive = true
-            };
-            var modelList = JsonSerializer.Deserialize<ModelList>(content, options);
-            return modelList.Models;
-        }
+                Dictionary<string, string> responseStats = new Dictionary<string, string>();
 
-        public async Task<List<string>> GetLoadedModelsAsync()
-        {
-            var availableModels = await GetAvailableModelsAsync();
-            var loadedModels = new List<string>();
-
-            foreach (var model in availableModels)
-            {
-                var request = new { name = model.Name };
-                var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/show", content);
-                var responseContent = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
+                foreach (var line in jsonLines.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    loadedModels.Add(model.Name);
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(line);
+                        var root = doc.RootElement;
+                        
+                        CollectStatIfExists(root, "done_reason", responseStats);
+                        CollectStatIfExists(root, "total_duration", responseStats);
+                        CollectStatIfExists(root, "prompt_eval_count", responseStats);
+                        CollectStatIfExists(root, "prompt_eval_duration", responseStats);
+                        CollectStatIfExists(root, "eval_count", responseStats);
+                        CollectStatIfExists(root, "eval_duration", responseStats);
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Failed to parse JSON: {ex.Message}");
+                    }
                 }
+
+                return responseStats;
             }
-
-            return loadedModels;
-        }
-
-        public async Task<ModelList> GetRunningModelsAsync()
-        {
-            var response = await _httpClient.GetAsync($"{_ollamaBaseUrl}/api/ps");
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            var options = new JsonSerializerOptions
+            catch
             {
-                PropertyNameCaseInsensitive = true
-            };
-            var modelList = JsonSerializer.Deserialize<ModelList>(content, options);
-            //return modelList.Models.Select(m => m.Name).ToList();
-            return modelList;
-
-        }
-
-        public async Task LoadModelAsync(string modelName)
-        {
-            var request = new { name = modelName };
-            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/pull", content);
-            response.EnsureSuccessStatusCode();
-        }
-
-        public async Task<string> ProcessQueryWithFunctions(string query, string model = "reader-lm:0.5b-fp16")
-        {
-            // First, use the model to interpret the query
-            var interpretation = await GenerateResponseAsync($"Interpret this query and decide if it requires a web search: {query}", model);
-
-            if (interpretation.Contains("web search", StringComparison.OrdinalIgnoreCase))
-            {
-                // If web search is needed, use the model to generate a search query
-                var searchQuery = await GenerateResponseAsync($"Generate a web search query for: {query}", model);
-
-                // Perform the web search
-                var searchResults = await PerformWebSearch(searchQuery);
-
-                // Use the model to process and summarize the search results
-                var summary = await GenerateResponseAsync($"Summarize these search results to answer the original query: {query}\n\nSearch results: {searchResults}", model);
-
-                return summary;
-            }
-            else
-            {
-                // If no web search is needed, just use the model to answer directly
-                return await GenerateResponseAsync(query, model);
+                return new Dictionary<string, string>();
             }
         }
-
-        public async Task<string> PerformWebSearch2(string query)
+        
+        private void CollectStatIfExists(JsonElement root, string propertyName, Dictionary<string, string> stats)
         {
-            // This is a simple web scraping example using Google search results
-            var url = $"https://www.google.com/search?q={Uri.EscapeDataString(query)}";
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-
-            var doc = new HtmlDocument();
-            doc.LoadHtml(content);
-
-            // Extract search result snippets
-            var snippets = doc.DocumentNode.SelectNodes("//div[@class='g']//div[@class='s']//div[@class='st']");
-
-            if (snippets != null && snippets.Count > 0)
+            if (root.TryGetProperty(propertyName, out var element))
             {
-                return string.Join("\n", snippets.Take(3).Select(s => s.InnerText.Trim()));
-            }
-
-            return "No results found.";
-        }
-
-        public async Task<string> PerformWebSearch(string query)
-        {
-            // This is a placeholder. In a real implementation, you would use a proper search API.
-            var queryContent = $"https://api.duckduckgo.com/?q={Uri.EscapeDataString(query)}&format=json";
-            var response = await _httpClient.GetAsync(queryContent);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-
-            // Parse the JSON response and extract relevant information
-            // This is a simplified example and would need to be adapted based on the actual API response
-            using (JsonDocument doc = JsonDocument.Parse(content))
-            {
-                var root = doc.RootElement;
-                if (root.TryGetProperty("Abstract", out JsonElement abstractText))
-                {
-                    return abstractText.GetString();
-                }
-            }
-
-            return "No results found.";
-        }
-    }
-
-    public class VRAMUsage
-    {
-        public long TotalVRAM { get; set; }
-        public long UsedVRAM { get; set; }
-        public long AvailableVRAM { get; set; }
-    }
-
-    public class ModelList
-    {
-        public List<ModelInfo> Models { get; set; }
-    }
-
-    public class ModelInfo
-    {
-        public string Name { get; set; }
-        public string Model { get; set; }
-        public DateTime ModifiedAt { get; set; }
-        public long Size { get; set; }
-        //public int SizeInGb { get { return (int)(Size/1024/1024/1024); } }
-        public int SizeInGb { get { return (int)(Size/1000000000); } }
-        public string Digest { get; set; }
-        public ModelDetails Details { get; set; }
-    }
-
-    public class ModelDetails
-    {
-        public string ParentModel { get; set; }
-        public string Format { get; set; }
-        public string Family { get; set; }
-        public List<string> Families { get; set; }
-        public string ParameterSize { get; set; }
-        public string QuantizationLevel { get; set; }
-    }
-
-    public class TagList
-    {
-        public List<string> Models { get; set; }
-    }
-
-    public class AgentAction
-    {
-        public string Description { get; set; }
-        public Func<string, Task<string>> ExecuteAsync { get; set; }
-    }
-
-    public class AgentOrchestrator
-    {
-        private readonly OllamaClient _agent;
-        private readonly List<AgentAction> _actions = new List<AgentAction>();
-
-        public AgentOrchestrator(OllamaClient agent)
-        {
-            _agent = agent;
-        }
-
-        public void AddAction(string description, Func<string, Task<string>> executeAsync)
-        {
-            _actions.Add(new AgentAction { Description = description, ExecuteAsync = executeAsync });
-        }
-
-        public async Task RunActionsAsync()
-        {
-            foreach (var action in _actions)
-            {
-                Console.WriteLine($"Executing action: {action.Description}");
-                try
-                {
-                    var result = await action.ExecuteAsync(action.Description);
-                    Console.WriteLine($"Action result: {result}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error executing action: {ex.Message}");
-                }
+                stats[propertyName] = element.ToString();
             }
         }
+        
+        #region Ollama Specific Classes
+        
+        // These classes are specific to Ollama's API response format
+        private class OllamaModelList
+        {
+            public List<OllamaModelInfo> Models { get; set; }
+        }
 
+        private class OllamaModelInfo
+        {
+            public string Name { get; set; }
+            public string Model { get; set; }
+            public DateTime ModifiedAt { get; set; }
+            public long Size { get; set; }
+            public string Digest { get; set; }
+            public OllamaModelDetails Details { get; set; }
+        }
 
+        private class OllamaModelDetails
+        {
+            public string ParentModel { get; set; }
+            public string Format { get; set; }
+            public string Family { get; set; }
+            public List<string> Families { get; set; }
+            public string ParameterSize { get; set; }
+            public string QuantizationLevel { get; set; }
+        }
+        
+        #endregion
     }
-
-    
 }

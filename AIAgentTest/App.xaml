@@ -3,6 +3,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="UI/MainWindow.xaml">
     <Application.Resources>
-
+        <ResourceDictionary>
+            <SolidColorBrush x:Key="WindowBackground" Color="White"/>
+            <SolidColorBrush x:Key="TextColor" Color="Black"/>
+            <SolidColorBrush x:Key="MenuBackground" Color="WhiteSmoke"/>
+            <SolidColorBrush x:Key="BorderColor" Color="#CCCCCC"/>
+            <SolidColorBrush x:Key="ControlBackground" Color="White"/>
+            <SolidColorBrush x:Key="SelectionBackground" Color="#ADD8E6"/>
+            <SolidColorBrush x:Key="HyperlinkColor" Color="#0066CC"/>
+            <SolidColorBrush x:Key="MenuItemSelectedBackground" Color="#E5E5E5"/>
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="White"/>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

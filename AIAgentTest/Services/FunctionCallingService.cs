@@ -37,6 +37,11 @@ namespace AIAgentTest.Services
             return JsonSerializer.Serialize(_functions.Values.Select(f => f.Definition).ToList());
         }
 
+        public List<FunctionDefinition> GetFunctionDefinitions2()
+        {
+            return _functions.Values.Select(f => f.Definition).ToList();
+        }
+
         public async Task<string> ProcessAIResponse(string response)
         {
             try
