@@ -8,6 +8,10 @@
     <UseWPF>true</UseWPF>
 	<ApplicationDefinition>App.xaml</ApplicationDefinition>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <Compile Remove="ViewModels\ChatSessionViewModel.mcp.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Update="Properties\Settings.settings">

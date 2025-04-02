@@ -10,9 +10,12 @@ using Microsoft.Win32;
 namespace AIAgentTest.Views
 {
     public partial class ChatPanel : UserControl
+{
+    // Add a reference to the CodeViewModel
+    public CodeViewModel CodeViewModel { get; set; }
+    
+    public ChatPanel()
     {
-        public ChatPanel()
-        {
             InitializeComponent();
             
             // Register with the view model after data context is set
@@ -116,6 +119,9 @@ namespace AIAgentTest.Views
             link.Tag = code;
             link.Click += CodeLink_Click;
             
+            // Add debug output to verify this is called
+            System.Diagnostics.Debug.WriteLine($"Adding code link for {language} code");
+            
             paragraph.Inlines.Add(link);
             ConversationBox.Document.Blocks.Add(paragraph);
             ConversationBox.ScrollToEnd();
@@ -127,28 +133,62 @@ namespace AIAgentTest.Views
             ConversationBox.Document = new FlowDocument();
         }
         
+        // New method for the EventSetter in XAML
+        private void Hyperlink_Click(object sender, RoutedEventArgs e)
+        {
+        // Call our existing method
+        System.Diagnostics.Debug.WriteLine("Hyperlink_Click called");
+        CodeLink_Click(sender, e);
+        }
+        
         private void CodeLink_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Hyperlink link && 
-                link.Tag is string code && 
-                Window.GetWindow(this) is Window window)
+        System.Diagnostics.Debug.WriteLine("CodeLink_Click called");
+        
+        if (sender is Hyperlink link && link.Tag is string code)
+        {
+        // Extract language from the link text if possible
+        string linkText = "";
+        if (link.Inlines.FirstInline is Run run)
+        {
+            linkText = run.Text;
+        }
+        
+        string language = "text";
+        
+        if (linkText.Contains("[View ") && linkText.Contains(" Code]"))
+        {
+            language = linkText.Replace("[View ", "").Replace(" Code]", "");
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"Code link clicked: {language}, code length: {code.Length}");
+        
+        // First try to use the direct reference to CodeViewModel
+        if (CodeViewModel != null)
+        {
+        System.Diagnostics.Debug.WriteLine("Using direct CodeViewModel reference");
+        CodeViewModel.SetCode(code, language);
+            return;
+            }
+                
+            // Fallback to find the main view model through the window
+            var window = Window.GetWindow(this);
+            if (window?.DataContext is MainViewModel mainVM)
             {
-                // Find the main view model
-                if (window.DataContext is MainViewModel mainVM)
-                {
-                    // Extract language from the link text if possible
-                    string linkText = ((Run)link.Inlines.FirstInline).Text;
-                    string language = "text";
-                    
-                    if (linkText.Contains("[View ") && linkText.Contains(" Code]"))
-                    {
-                        language = linkText.Replace("[View ", "").Replace(" Code]", "");
-                    }
-                    
-                    // Update the code view model
-                    mainVM.CodeVM.SetCode(code, language);
-                }
+                System.Diagnostics.Debug.WriteLine("Using MainViewModel from window");
+                mainVM.CodeVM.SetCode(code, language);
+            }
+            else
+            {
+                // For debug purposes, show a message if we couldn't find the view model
+                System.Diagnostics.Debug.WriteLine("Could not find the MainViewModel or CodeViewModel!");
             }
         }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("Link is invalid: " + (sender is Hyperlink ? "Is hyperlink" : "Not hyperlink") + 
+                                          ", " + (sender is Hyperlink hyperlink && hyperlink.Tag is string ? "Has string tag" : "No string tag"));
+        }
+    }
     }
 }
