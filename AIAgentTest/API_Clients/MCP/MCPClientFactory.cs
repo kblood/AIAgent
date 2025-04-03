@@ -47,23 +47,16 @@ namespace AIAgentTest.API_Clients.MCP
                         throw new InvalidOperationException("Failed to create Ollama client");
                     }
                     
-                    // Use the enhanced adapter if tool registry is available, otherwise use the basic adapter
-                    if (_toolRegistry != null)
+                    // Create the MCP adapter
+                    var mcpAdapter = new OllamaMCPAdapter(ollamaClient, _parsingService, _toolRegistry);
+                    
+                    // Register any existing MCP servers
+                    foreach (var entry in _serverClients)
                     {
-                        var enhancedAdapter = new EnhancedOllamaMCPAdapter(ollamaClient, _parsingService, _toolRegistry);
-                        
-                        // Register any existing MCP servers
-                        foreach (var entry in _serverClients)
-                        {
-                            enhancedAdapter.RegisterMCPServer(entry.Key, entry.Value);
-                        }
-                        
-                        return enhancedAdapter;
+                        mcpAdapter.RegisterMCPServer(entry.Key, entry.Value);
                     }
-                    else
-                    {
-                        return new OllamaMCPAdapter(ollamaClient, _parsingService);
-                    }
+                    
+                    return mcpAdapter;
                     
                 // Add other providers as needed
                     

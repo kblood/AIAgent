@@ -34,5 +34,17 @@ namespace AIAgentTest.Properties {
                 this["IsLightTheme"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string MCPServers {
+            get {
+                return ((string)(this["MCPServers"]));
+            }
+            set {
+                this["MCPServers"] = value;
+            }
+        }
     }
 }

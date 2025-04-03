@@ -46,15 +46,15 @@ namespace AIAgentTest.Services.MCP
         }
         
         /// <summary>
-        /// Creates an enhanced Ollama MCP adapter
+        /// Creates an Ollama MCP adapter
         /// </summary>
-        public static EnhancedOllamaMCPAdapter CreateEnhancedOllamaAdapter()
+        public static OllamaMCPAdapter CreateOllamaMCPAdapter()
         {
             var ollamaClient = (OllamaClient)LLMClientFactory.GetClient(LLMClientFactory.ProviderType.Ollama);
             var messageParsingService = ServiceProvider.GetService<IMessageParsingService>();
             var toolRegistry = ServiceProvider.GetService<IToolRegistry>();
             
-            return new EnhancedOllamaMCPAdapter(ollamaClient, messageParsingService, toolRegistry);
+            return new OllamaMCPAdapter(ollamaClient, messageParsingService, toolRegistry);
         }
     }
 }

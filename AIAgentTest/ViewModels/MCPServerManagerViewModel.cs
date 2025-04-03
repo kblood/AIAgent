@@ -81,9 +81,13 @@ namespace AIAgentTest.ViewModels
         private void LoadServers()
         {
             // Load from application settings
-            // MCPServers setting isn't defined yet, using empty array for now
-            var serverList = Array.Empty<string>();
-            // In a production implementation, this would load from Properties.Settings.Default.MCPServers
+            var serversString = Properties.Settings.Default.MCPServers;
+            if (string.IsNullOrEmpty(serversString))
+            {
+                return; // No servers configured
+            }
+            
+            var serverList = serversString.Split(';');
             
             foreach (var serverString in serverList)
             {
@@ -123,9 +127,8 @@ namespace AIAgentTest.ViewModels
                 serverStrings.Add($"{server.Name}|{server.Url}|{server.Type}|{server.IsEnabled}");
             }
             
-            // Properties.Settings.Default.MCPServers = string.Join(";", serverStrings);
-            // Properties.Settings.Default.Save();
-            // In a production implementation, this would save to application settings
+            Properties.Settings.Default.MCPServers = string.Join(";", serverStrings);
+            Properties.Settings.Default.Save();
         }
         
         /// <summary>
@@ -140,7 +143,8 @@ namespace AIAgentTest.ViewModels
             switch (server.Type.ToLowerInvariant())
             {
                 case "filesystem":
-                    // Example: _mcpClientFactory.RegisterMCPServer(server.Name, new FilesystemMCPServerClient(server.Url));
+                    var fileSystemServer = new FileSystemMCPServerClient(server.Url);
+                    _mcpClientFactory.RegisterMCPServer(server.Name, fileSystemServer);
                     break;
                 case "database":
                     // Example: _mcpClientFactory.RegisterMCPServer(server.Name, new DatabaseMCPServerClient(server.Url));
@@ -165,12 +169,11 @@ namespace AIAgentTest.ViewModels
         /// </summary>
         private void ExecuteAddServer()
         {
-            // var dialog = new Views.MCPServerDialog(); // Uncomment when the dialog view is implemented
-            bool dialogResult = false; // Simulating dialog interaction
+            var dialog = new Views.MCPServerDialog();
             var viewModel = new MCPServerEditorViewModel(null);
-            // dialog.DataContext = viewModel; // Uncomment when the dialog view is implemented
+            dialog.DataContext = viewModel;
             
-            if (dialogResult) // Simulate dialog result for now
+            if (dialog.ShowDialog() == true)
             {
                 // Create new server from the editor
                 var newServer = new MCPServerViewModel
@@ -201,12 +204,11 @@ namespace AIAgentTest.ViewModels
         {
             if (SelectedServer == null) return;
             
-            // var dialog = new Views.MCPServerDialog(); // Uncomment when the dialog view is implemented
-            bool dialogResult = false; // Simulating dialog interaction
+            var dialog = new Views.MCPServerDialog();
             var viewModel = new MCPServerEditorViewModel(SelectedServer);
-            // dialog.DataContext = viewModel; // Uncomment when the dialog view is implemented
+            dialog.DataContext = viewModel;
             
-            if (dialogResult) // Simulate dialog result for now
+            if (dialog.ShowDialog() == true)
             {
                 // Get the original enabled state
                 bool wasEnabled = SelectedServer.IsEnabled;

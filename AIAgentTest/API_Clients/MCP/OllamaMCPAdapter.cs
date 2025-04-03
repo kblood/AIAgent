@@ -5,89 +5,91 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Net.Http;
 using AIAgentTest.Services.Interfaces;
 using AIAgentTest.Services.MCP;
 
 namespace AIAgentTest.API_Clients.MCP
 {
     /// <summary>
-    /// Adapter to provide MCP capabilities for Ollama models
+    /// Enhanced implementation of Ollama MCP support inspired by the ollama-mcp-bridge project
     /// </summary>
     public class OllamaMCPAdapter : IMCPLLMClient
     {
         private readonly OllamaClient _ollamaClient;
         private readonly IMessageParsingService _parsingService;
+        private readonly IToolRegistry _toolRegistry;
+        private readonly Dictionary<string, IMCPServerClient> _serverClients = new Dictionary<string, IMCPServerClient>();
         
         /// <summary>
-        /// Creates a new OllamaMCPAdapter
+        /// Creates a new EnhancedOllamaMCPAdapter
         /// </summary>
         /// <param name="ollamaClient">The underlying Ollama client</param>
         /// <param name="parsingService">Service for parsing messages</param>
-        public OllamaMCPAdapter(OllamaClient ollamaClient, IMessageParsingService parsingService)
+        /// <param name="toolRegistry">Registry of available tools</param>
+        public OllamaMCPAdapter(
+            OllamaClient ollamaClient, 
+            IMessageParsingService parsingService,
+            IToolRegistry toolRegistry)
         {
             _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
             _parsingService = parsingService ?? throw new ArgumentNullException(nameof(parsingService));
+            _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         }
         
         /// <summary>
         /// Indicates that this adapter supports MCP
         /// </summary>
-        public bool SupportsMCP => true; // We're providing MCP support via the adapter
+        public bool SupportsMCP => true;
         
         /// <summary>
-        /// Generates a response using Ollama with MCP-like tool capabilities
+        /// Registers an MCP server with this adapter
+        /// </summary>
+        /// <param name="serverName">Name of the server</param>
+        /// <param name="serverClient">Client for communicating with the server</param>
+        public void RegisterMCPServer(string serverName, IMCPServerClient serverClient)
+        {
+            _serverClients[serverName] = serverClient;
+        }
+        
+        /// <summary>
+        /// Generates a response using Ollama with MCP capabilities
         /// </summary>
         public async Task<MCPResponse> GenerateWithMCPAsync(string prompt, string model, List<ToolDefinition> tools)
         {
-            // Create a tool-aware prompt with special format for tool detection
-            var toolsDescription = new StringBuilder();
+            // Create a tool map for quick lookup when parsing responses
+            var toolMap = tools.ToDictionary(t => t.Name, t => t);
             
-            toolsDescription.AppendLine("You have access to the following tools:");
+            // Format tools in a clear and structured way
+            var toolsDescription = FormatToolDescriptions(tools);
             
-            foreach (var tool in tools)
+            // Create a system message that instructs the model on how to use tools
+            var systemMessage = @"You are an AI assistant that can use tools to help answer questions.
+If you need to use a tool, respond in the following format:
+<tool_call>
+{
+  ""tool"": ""tool_name"",
+  ""parameters"": {
+    ""param1"": ""value1"",
+    ""param2"": ""value2""
+  }
+}
+</tool_call>
+
+If you don't need to use a tool, just respond normally.
+";
+            
+            // Combine messages into a full prompt with lower temperature
+            var fullPrompt = $"{systemMessage}\n\nAvailable tools:\n{toolsDescription}\n\nUser: {prompt}\n\nAssistant: ";
+            
+            // Generate response with Ollama with lower temperature for better format compliance
+            var requestParams = new Dictionary<string, object>
             {
-                toolsDescription.AppendLine($"## {tool.Name}");
-                toolsDescription.AppendLine($"Description: {tool.Description}");
-                
-                // Format input parameters
-                toolsDescription.AppendLine("Parameters:");
-                var properties = (Dictionary<string, object>)tool.Input["properties"];
-                var required = tool.Input.ContainsKey("required") 
-                    ? (List<string>)tool.Input["required"] 
-                    : new List<string>();
-                    
-                foreach (var param in properties)
-                {
-                    var paramName = param.Key;
-                    var paramDetails = (Dictionary<string, object>)param.Value;
-                    var isRequired = required.Contains(paramName) ? "required" : "optional";
-                    
-                    toolsDescription.AppendLine($"- {paramName} ({isRequired}): {paramDetails["description"]}");
-                }
-                
-                toolsDescription.AppendLine();
-            }
+                { "temperature", 0.2 }, // Lower temperature for better format compliance
+                { "top_p", 0.9 }
+            };
             
-            toolsDescription.AppendLine("IMPORTANT: If you need to use a tool, your response MUST be in the exact format:");
-            toolsDescription.AppendLine("I'll use the [TOOL_NAME] tool with these parameters:");
-            toolsDescription.AppendLine("<tool_call>");
-            toolsDescription.AppendLine("{");
-            toolsDescription.AppendLine("  \"tool\": \"tool_name\",");
-            toolsDescription.AppendLine("  \"parameters\": {");
-            toolsDescription.AppendLine("    \"param1\": \"value1\",");
-            toolsDescription.AppendLine("    \"param2\": \"value2\"");
-            toolsDescription.AppendLine("  }");
-            toolsDescription.AppendLine("}");
-            toolsDescription.AppendLine("</tool_call>");
-            toolsDescription.AppendLine("Wait for the tool to run and return results. DO NOT make up tool results.");
-            toolsDescription.AppendLine();
-            toolsDescription.AppendLine("If you don't need to use a tool, respond normally without the tool_call format.");
-            
-            // Combine with user prompt
-            var fullPrompt = $"{toolsDescription}\n\nUser: {prompt}\n\nAssistant: ";
-            
-            // Generate response with Ollama
-            var result = await _ollamaClient.GenerateTextResponseAsync(fullPrompt, model);
+            var result = await _ollamaClient.GenerateTextResponseWithParamsAsync(fullPrompt, model, requestParams);
             
             // Try to parse the response as a tool use
             try
@@ -110,15 +112,25 @@ namespace AIAgentTest.API_Clients.MCP
                         // Extract text before the tool call as preamble
                         var preamble = result.Substring(0, match.Index).Trim();
                         
+                        // If this is an MCP server tool, determine which server it belongs to
+                        string serverName = null;
+                        if (toolMap.TryGetValue(toolName, out var toolDefinition) && 
+                            toolDefinition.Metadata != null &&
+                            toolDefinition.Metadata.TryGetValue("server_name", out var server))
+                        {
+                            serverName = server.ToString();
+                        }
+                        
                         return new MCPResponse
                         {
                             Type = "tool_use",
                             Tool = toolName,
                             Input = parameters,
-                            Text = preamble, // Retain any explanatory text
+                            Text = preamble,
                             Metadata = new Dictionary<string, object>
                             {
-                                { "raw_response", result }
+                                { "raw_response", result },
+                                { "server_name", serverName }
                             }
                         };
                     }
@@ -131,13 +143,18 @@ namespace AIAgentTest.API_Clients.MCP
                     Text = result
                 };
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error parsing tool call: {ex.Message}");
                 // If parsing fails, treat as regular text
                 return new MCPResponse
                 {
                     Type = "text",
-                    Text = result
+                    Text = result,
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "error", ex.Message }
+                    }
                 };
             }
         }
@@ -162,10 +179,16 @@ You used the {toolName} tool, which returned the following result:
 </tool_result>
 
 Based on this tool result, please provide a helpful response to the user's original query.
-If you need to use another tool, respond in the tool_call format as instructed previously.";
+If you need to use another tool, respond using the tool_call format as instructed previously.";
 
-            // Generate a follow-up response
-            var result = await _ollamaClient.GenerateTextResponseAsync(prompt, model);
+            // Generate a follow-up response with lower temperature for consistent formatting
+            var requestParams = new Dictionary<string, object>
+            {
+                { "temperature", 0.3 }, // Keep temperature low for consistent formatting
+                { "top_p", 0.9 }
+            };
+            
+            var result = await _ollamaClient.GenerateTextResponseWithParamsAsync(prompt, model, requestParams);
             
             // Parse for any additional tool calls
             try
@@ -187,6 +210,16 @@ If you need to use another tool, respond in the tool_call format as instructed p
                         // Extract text before the tool call as preamble
                         var preamble = result.Substring(0, match.Index).Trim();
                         
+                        // Check if the tool belongs to an MCP server
+                        var toolDefinition = _toolRegistry.GetToolDefinition(nextToolName);
+                        string serverName = null;
+                        
+                        if (toolDefinition?.Metadata != null && 
+                            toolDefinition.Metadata.TryGetValue("server_name", out var server))
+                        {
+                            serverName = server.ToString();
+                        }
+                        
                         return new MCPResponse
                         {
                             Type = "tool_use",
@@ -197,7 +230,8 @@ If you need to use another tool, respond in the tool_call format as instructed p
                             {
                                 { "previous_tool", toolName },
                                 { "previous_result", toolResult },
-                                { "raw_response", result }
+                                { "raw_response", result },
+                                { "server_name", serverName }
                             }
                         };
                     }
@@ -210,13 +244,18 @@ If you need to use another tool, respond in the tool_call format as instructed p
                     Text = result
                 };
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error parsing tool call: {ex.Message}");
                 // If parsing fails, return as text
                 return new MCPResponse
                 {
                     Type = "text",
-                    Text = result
+                    Text = result,
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "error", ex.Message }
+                    }
                 };
             }
         }
@@ -255,7 +294,20 @@ If you need to use another tool, respond in the tool_call format as instructed p
                         contextBuilder.AppendLine();
                         break;
                         
-                    // Add other context message types as needed
+                    case "retrieval_request":
+                        contextBuilder.AppendLine("Retrieval Request:");
+                        contextBuilder.AppendLine($"Query: {message.Input["query"]}");
+                        if (message.Input.ContainsKey("source") && message.Input["source"] != null)
+                        {
+                            contextBuilder.AppendLine($"Source: {message.Input["source"]}");
+                        }
+                        break;
+                        
+                    case "retrieval_result":
+                        contextBuilder.AppendLine("Retrieval Result:");
+                        contextBuilder.AppendLine($"Source: {message.Input["source"]}");
+                        contextBuilder.AppendLine($"Result: {JsonSerializer.Serialize(message.Result)}");
+                        break;
                 }
             }
             
@@ -269,6 +321,27 @@ Please respond based on this context and the current query.";
 
             // Generate response
             return await _ollamaClient.GenerateTextResponseAsync(fullPrompt, model);
+        }
+        
+        /// <summary>
+        /// Executes a tool, whether it's local or on an MCP server
+        /// </summary>
+        public async Task<object> ExecuteToolAsync(string toolName, Dictionary<string, object> parameters, string serverName = null)
+        {
+            // If a server name is provided, route to that server
+            if (!string.IsNullOrEmpty(serverName) && _serverClients.TryGetValue(serverName, out var serverClient))
+            {
+                return await serverClient.ExecuteToolAsync(toolName, parameters);
+            }
+            
+            // Otherwise use the local tool registry
+            var handler = _toolRegistry.GetToolHandler(toolName);
+            if (handler != null)
+            {
+                return await handler(parameters);
+            }
+            
+            throw new Exception($"Tool '{toolName}' not found");
         }
         
         // ILLMClient interface implementation - forwarding to the underlying client
@@ -367,6 +440,40 @@ Please respond based on this context and the current query.";
                 ToolType = "function",
                 Tags = new List<string> { "function" }
             };
+        }
+        
+        /// <summary>
+        /// Format tool descriptions in a way that's clear for LLMs
+        /// </summary>
+        private string FormatToolDescriptions(List<ToolDefinition> tools)
+        {
+            var builder = new StringBuilder();
+            
+            foreach (var tool in tools)
+            {
+                builder.AppendLine($"## {tool.Name}");
+                builder.AppendLine($"Description: {tool.Description}");
+                
+                // Format input parameters
+                builder.AppendLine("Parameters:");
+                var properties = (Dictionary<string, object>)tool.Input["properties"];
+                var required = tool.Input.ContainsKey("required") 
+                    ? (List<string>)tool.Input["required"] 
+                    : new List<string>();
+                    
+                foreach (var param in properties)
+                {
+                    var paramName = param.Key;
+                    var paramDetails = (Dictionary<string, object>)param.Value;
+                    var isRequired = required.Contains(paramName) ? "required" : "optional";
+                    
+                    builder.AppendLine($"- {paramName} ({isRequired}): {paramDetails["description"]}");
+                }
+                
+                builder.AppendLine();
+            }
+            
+            return builder.ToString();
         }
     }
 }
