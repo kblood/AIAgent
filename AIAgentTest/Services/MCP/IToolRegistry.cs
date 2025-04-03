@@ -78,5 +78,35 @@ namespace AIAgentTest.Services.MCP
         /// </summary>
         /// <returns>List of function definitions</returns>
         List<FunctionDefinition> GetFunctionDefinitions();
+        
+        /// <summary>
+        /// Enables a tool for use
+        /// </summary>
+        /// <param name="toolName">Name of the tool to enable</param>
+        void EnableTool(string toolName);
+        
+        /// <summary>
+        /// Disables a tool
+        /// </summary>
+        /// <param name="toolName">Name of the tool to disable</param>
+        void DisableTool(string toolName);
+        
+        /// <summary>
+        /// Checks if a tool is enabled
+        /// </summary>
+        /// <param name="toolName">Name of the tool</param>
+        /// <returns>True if the tool is enabled</returns>
+        bool IsToolEnabled(string toolName);
+        
+        /// <summary>
+        /// Gets all tool definitions including disabled ones
+        /// </summary>
+        /// <returns>List of all tool definitions</returns>
+        List<ToolDefinition> GetAllToolDefinitions();
+        
+        /// <summary>
+        /// Event that is triggered when tool enable/disable state changes
+        /// </summary>
+        event EventHandler ToolsChanged;
     }
 }

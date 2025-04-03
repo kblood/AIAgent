@@ -1,0 +1,65 @@
+<UserControl x:Class="AIAgentTest.Views.ToolManagerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="Tools Manager" FontSize="18" FontWeight="Bold"/>
+            <TextBlock Text="Enable or disable tools used by the AI" 
+                     Opacity="0.7" TextWrapping="Wrap"/>
+        </StackPanel>
+        
+        <!-- Search box -->
+        <TextBox Grid.Row="1" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
+                Padding="5" Margin="0,0,0,10"/>
+        
+        <!-- Categories and tools -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Categories}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded}" 
+                                 Margin="0,0,0,5">
+                            <ItemsControl ItemsSource="{Binding Tools}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="5">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            
+                                            <!-- Toggle switch -->
+                                            <ToggleButton Grid.Row="0" Grid.RowSpan="2" 
+                                                        IsChecked="{Binding IsEnabled}" 
+                                                        VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            
+                                            <!-- Tool name -->
+                                            <TextBlock Grid.Row="0" Grid.Column="1" 
+                                                     Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            
+                                            <!-- Tool description -->
+                                            <TextBlock Grid.Row="1" Grid.Column="1" 
+                                                     Text="{Binding Description}" TextWrapping="Wrap" 
+                                                     Opacity="0.7" Margin="0,3,0,0"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

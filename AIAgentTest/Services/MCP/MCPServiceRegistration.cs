@@ -26,7 +26,7 @@ namespace AIAgentTest.Services.MCP
             // Register the MCP client factory
             var llmClientFactory = new LLMClientFactory();
             var messageParsingService = ServiceProvider.GetService<IMessageParsingService>();
-            var mcpClientFactory = new MCPClientFactory(llmClientFactory, messageParsingService);
+            var mcpClientFactory = new MCPClientFactory(llmClientFactory, messageParsingService, toolRegistry);
             ServiceProvider.RegisterService<MCPClientFactory>(mcpClientFactory);
             
             // Register the MCP LLM client service
@@ -40,6 +40,21 @@ namespace AIAgentTest.Services.MCP
             
             // Register tools with the registry
             commonTools.RegisterCommonTools(toolRegistry);
+            
+            // Register MCP servers
+            MCPServerRegistration.RegisterMCPServersAsync(mcpClientFactory).ConfigureAwait(false);
+        }
+        
+        /// <summary>
+        /// Creates an enhanced Ollama MCP adapter
+        /// </summary>
+        public static EnhancedOllamaMCPAdapter CreateEnhancedOllamaAdapter()
+        {
+            var ollamaClient = (OllamaClient)LLMClientFactory.GetClient(LLMClientFactory.ProviderType.Ollama);
+            var messageParsingService = ServiceProvider.GetService<IMessageParsingService>();
+            var toolRegistry = ServiceProvider.GetService<IToolRegistry>();
+            
+            return new EnhancedOllamaMCPAdapter(ollamaClient, messageParsingService, toolRegistry);
         }
     }
 }
