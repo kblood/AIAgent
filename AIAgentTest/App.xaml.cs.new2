@@ -63,7 +63,13 @@ namespace AIAgentTest
             ServiceProvider.Register<ILLMClientService, LLMClientService>();
             ServiceProvider.Register<IMessageParsingService, MessageParsingService>();
             ServiceProvider.Register<IChatSessionService, ChatSessionService>();
-            ServiceProvider.Register<IContextManager>(() => new AbstractedContextManager(ollamaClient));
+            // Register context manager with a default model
+            ServiceProvider.Register<IContextManager>(() => {
+                var contextManager = new AbstractedContextManager(ollamaClient);
+                contextManager.DefaultModel = "llama3"; // Set a default model
+                contextManager.IsContextEnabled = true;
+                return contextManager;
+            });
             ServiceProvider.Register<ThemeService>();
         }
         

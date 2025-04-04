@@ -89,7 +89,11 @@ namespace AIAgentTest.ViewModels
             // Initialize commands
             ToggleLightThemeCommand = new RelayCommand(() => IsLightTheme = true);
             ToggleDarkThemeCommand = new RelayCommand(() => IsLightTheme = false);
-            ToggleDebugCommand = new RelayCommand(() => DebugVM.IsVisible = !DebugVM.IsVisible);
+            ToggleDebugCommand = new RelayCommand(() => {
+                DebugVM.IsVisible = !DebugVM.IsVisible;
+                System.Diagnostics.Debug.WriteLine($"Debug panel visibility set to: {DebugVM.IsVisible}");
+                OnPropertyChanged(nameof(DebugVM));
+            });
             ToggleModelSelectionCommand = new RelayCommand(() => IsModelSelectionVisible = !IsModelSelectionVisible);
             ToggleToolManagerCommand = new RelayCommand(() => IsToolManagerVisible = !IsToolManagerVisible, () => ToolManagerVM != null);
             ToggleMCPServerManagerCommand = new RelayCommand(() => IsMCPServerManagerVisible = !IsMCPServerManagerVisible, () => MCPServerManagerVM != null);

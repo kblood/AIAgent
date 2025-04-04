@@ -45,11 +45,12 @@ namespace AIAgentTest.Services
         /// </summary>
         /// <param name="llmClient">The LLM client to use for operations</param>
         /// <param name="defaultModel">The default model to use (optional)</param>
-        public AbstractedContextManager(ILLMClient llmClient, string defaultModel = null)
+        public AbstractedContextManager(ILLMClient llmClient, string defaultModel = "llama3")
         {
             _chatHistory = new List<ChatMessage>();
-            _llmClient = llmClient;
+            _llmClient = llmClient ?? throw new ArgumentNullException(nameof(llmClient));
             _defaultModel = defaultModel;
+            _isContextEnabled = true;
         }
 
         /// <summary>
@@ -127,10 +128,21 @@ namespace AIAgentTest.Services
             // If still null, try to get a model from the client
             if (string.IsNullOrEmpty(modelToUse))
             {
-                // Try to get default model from client
-                var models = await _llmClient.GetAvailableModelsAsync();
-                modelToUse = models.FirstOrDefault();
+                try
+                {
+                    // Try to get default model from client
+                    var models = await _llmClient.GetAvailableModelsAsync();
+                    modelToUse = models.FirstOrDefault();
+                    System.Diagnostics.Debug.WriteLine($"Using first available model: {modelToUse}");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error getting models: {ex.Message}");
+                    throw new InvalidOperationException("No model was specified for summarization and no default models could be found.", ex);
+                }
             }
+
+            System.Diagnostics.Debug.WriteLine($"Summarizing context using model: {modelToUse ?? "(none)"}. Messages: {_chatHistory.Count}");
 
             string summarizePrompt = "Summarize the following conversation while preserving key points and context. Make it concise but include important details:\n\n";
             foreach (var message in _chatHistory)
@@ -138,8 +150,17 @@ namespace AIAgentTest.Services
                 summarizePrompt += $"{message.Role}: {message.Content}\n";
             }
 
-            _summarizedContext = await _llmClient.GenerateTextResponseAsync(summarizePrompt, modelToUse);
-            _chatHistory.Clear();
+            try
+            {
+                _summarizedContext = await _llmClient.GenerateTextResponseAsync(summarizePrompt, modelToUse);
+                _chatHistory.Clear();
+                System.Diagnostics.Debug.WriteLine("Context summarization successful");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during summarization: {ex.Message}");
+                throw new InvalidOperationException($"Failed to summarize context with model '{modelToUse}'", ex);
+            }
         }
 
         /// <summary>

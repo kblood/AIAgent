@@ -24,7 +24,7 @@ namespace AIAgentTest
                 var llmClientService = new LLMClientService(llmClient);
                 ServiceProvider.RegisterService<ILLMClientService>(llmClientService);
                 
-                var contextManager = new AbstractedContextManager(llmClient);
+                var contextManager = new AbstractedContextManager(llmClient, "llama3");
                 ServiceProvider.RegisterService<IContextManager>(contextManager);
                 
                 var chatSessionService = new ChatSessionService();
@@ -70,7 +70,7 @@ namespace AIAgentTest
                 var codeViewModel = new CodeViewModel();
                 ServiceProvider.RegisterService<CodeViewModel>(codeViewModel);
                 
-                var debugViewModel = new DebugViewModel(contextManager);
+                var debugViewModel = new DebugViewModel(mcpContextManager);
                 ServiceProvider.RegisterService<DebugViewModel>(debugViewModel);
                 
                 // Create MCP tool manager ViewModels

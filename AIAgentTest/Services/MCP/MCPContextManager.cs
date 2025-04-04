@@ -22,10 +22,10 @@ namespace AIAgentTest.Services.MCP
         /// </summary>
         public bool IsContextEnabled { get; set; } = true;
     
-    /// <summary>
-    /// Default model for summarization
-    /// </summary>
-    public string DefaultModel { get; set; } = "llama3";
+        /// <summary>
+        /// Default model for summarization
+        /// </summary>
+        public string DefaultModel { get; set; } = "llama3";
         
         /// <summary>
         /// Constructor
@@ -52,17 +52,22 @@ namespace AIAgentTest.Services.MCP
                 contextBuilder.AppendLine($"Previous context summary: {_summarizedContext}");
             
             var recentMessages = _messages
-                .Where(m => m.Role == "user" || m.Role == "assistant")
                 .TakeLast(5)
                 .ToList();
             
             foreach (var msg in recentMessages)
             {
-                if (msg.Role == "tool")
+                if (msg.Role == "tool" || (msg.Type != null && (msg.Type == "tool_use" || msg.Type == "tool_result")))
                 {
-                    contextBuilder.AppendLine($"Tool: {msg.ToolName}");
-                    contextBuilder.AppendLine($"Input: {msg.ToolInput}");
-                    contextBuilder.AppendLine($"Result: {msg.ToolResult}");
+                    // More detailed tool information
+                    contextBuilder.AppendLine($"[Tool call: {msg.ToolName}]");
+                    contextBuilder.AppendLine($"Tool Input: {Serialize(msg.ToolInput)}");
+                    
+                    if (msg.ToolResult != null)
+                    {
+                        contextBuilder.AppendLine($"Tool Result: {Serialize(msg.ToolResult)}");
+                    }
+                    contextBuilder.AppendLine(""); // Empty line for readability
                 }
                 else
                 {
@@ -88,23 +93,36 @@ namespace AIAgentTest.Services.MCP
             var contextBuilder = new StringBuilder();
             
             if (!string.IsNullOrEmpty(_summarizedContext))
-                contextBuilder.AppendLine($"Previous context summary: {_summarizedContext}");
+                contextBuilder.AppendLine($"Previous context summary: {_summarizedContext}\n");
             
             var recentMessages = _messages
                 .TakeLast(7)
                 .ToList();
             
+            // Add a message to help the model understand the format
+            if (recentMessages.Any(m => m.Role == "tool" || (m.Type != null && (m.Type == "tool_use" || m.Type == "tool_result"))))
+            {
+                contextBuilder.AppendLine("The conversation includes tool calls and results in the following format:");
+                contextBuilder.AppendLine("[Tool call: tool_name]\nTool Input: {...}\nTool Result: {...}\n");
+            }
+            
             foreach (var msg in recentMessages)
             {
-                if (msg.Role == "tool")
+                if (msg.Role == "tool" || (msg.Type != null && (msg.Type == "tool_use" || msg.Type == "tool_result")))
                 {
-                    contextBuilder.AppendLine($"Tool: {msg.ToolName}");
-                    contextBuilder.AppendLine($"Input: {msg.ToolInput}");
-                    contextBuilder.AppendLine($"Result: {msg.ToolResult}");
+                    // Format tool information for better context
+                    contextBuilder.AppendLine($"[Tool call: {msg.ToolName}]");
+                    contextBuilder.AppendLine($"Tool Input: {Serialize(msg.ToolInput)}");
+                    
+                    if (msg.ToolResult != null)
+                    {
+                        contextBuilder.AppendLine($"Tool Result: {Serialize(msg.ToolResult)}");
+                    }
+                    contextBuilder.AppendLine(""); // Empty line for readability
                 }
                 else
                 {
-                    contextBuilder.AppendLine($"{msg.Role}: {msg.Content}");
+                    contextBuilder.AppendLine($"{msg.Role}: {msg.Content}\n");
                 }
             }
             
@@ -123,7 +141,8 @@ namespace AIAgentTest.Services.MCP
             _messages.Add(new MCPContextMessage
             {
                 Role = role.ToLowerInvariant(),
-                Content = content
+                Content = content,
+                Type = "text" // Explicitly set message type
             });
         }
         
@@ -138,7 +157,8 @@ namespace AIAgentTest.Services.MCP
             {
                 Role = "tool",
                 ToolName = toolName,
-                ToolInput = toolInput
+                ToolInput = toolInput,
+                Type = "tool_use" // Explicitly set message type 
             });
         }
         
@@ -153,11 +173,18 @@ namespace AIAgentTest.Services.MCP
         {
             // Find the last tool use
             var lastToolUse = _messages
-                .LastOrDefault(m => m.Role == "tool" && m.ToolName == toolName && m.ToolResult == null);
+                .LastOrDefault(m => (m.Role == "tool" || (m.Type != null && m.Type == "tool_use")) && 
+                               m.ToolName == toolName && 
+                               m.ToolResult == null && 
+                               m.Result == null);
             
             if (lastToolUse != null)
             {
                 lastToolUse.ToolResult = success ? toolResult : new { error = errorMessage };
+                lastToolUse.Result = success ? toolResult : new { error = errorMessage };
+                lastToolUse.Success = success;
+                lastToolUse.Error = success ? null : errorMessage;
+                lastToolUse.Type = "tool_result";
             }
         }
         
@@ -191,13 +218,26 @@ namespace AIAgentTest.Services.MCP
                 
                 // Add messages to summarize
                 var oldMessages = _messages
-                    .Where(m => m.Role == "user" || m.Role == "assistant")
                     .Take(_messages.Count - 5)
                     .ToList();
                 
                 foreach (var msg in oldMessages)
                 {
-                    prompt += $"{msg.Role}: {msg.Content}\n";
+                    if (msg.Role == "tool" || (msg.Type != null && (msg.Type == "tool_use" || msg.Type == "tool_result")))
+                    {
+                        prompt += $"[Tool: {msg.ToolName}]\n";
+                        prompt += $"Input: {Serialize(msg.ToolInput)}\n";
+                        
+                        if (msg.ToolResult != null)
+                        {
+                            prompt += $"Result: {Serialize(msg.ToolResult)}\n";
+                        }
+                        prompt += "\n";
+                    }
+                    else
+                    {
+                        prompt += $"{msg.Role}: {msg.Content}\n\n";
+                    }
                 }
                 
                 // Generate summary using Ollama
@@ -223,60 +263,103 @@ namespace AIAgentTest.Services.MCP
         /// <returns>Context summary</returns>
         public string Summarize()
         {
-        return _summarizedContext ?? string.Empty;
+            return _summarizedContext ?? string.Empty;
         }
     
-    /// <summary>
-    /// Get full context
-    /// </summary>
-    /// <returns>Full context</returns>
-    public string GetFullContext()
-    {
-        var contextBuilder = new StringBuilder();
-        
-        if (!string.IsNullOrEmpty(_summarizedContext))
-            contextBuilder.AppendLine($"Previous context summary: {_summarizedContext}");
-        
-        foreach (var msg in _messages)
+        /// <summary>
+        /// Get full context
+        /// </summary>
+        /// <returns>Full context</returns>
+        public string GetFullContext()
         {
-            if (msg.Role == "tool")
+            var contextBuilder = new StringBuilder();
+            contextBuilder.AppendLine("=== FULL CURRENT CONTEXT ===");
+            contextBuilder.AppendLine();
+            
+            if (!string.IsNullOrEmpty(_summarizedContext))
             {
-                contextBuilder.AppendLine($"Tool: {msg.ToolName}");
-                contextBuilder.AppendLine($"Input: {msg.ToolInput}");
-                contextBuilder.AppendLine($"Result: {msg.ToolResult}");
+                contextBuilder.AppendLine("=== SUMMARIZED HISTORY ===");
+                contextBuilder.AppendLine(_summarizedContext);
+                contextBuilder.AppendLine();
+                contextBuilder.AppendLine("=== RECENT MESSAGES ===");
             }
-            else
+            
+            if (_messages.Count == 0)
             {
-                contextBuilder.AppendLine($"{msg.Role}: {msg.Content}");
+                contextBuilder.AppendLine("(Context is empty)");
+                return contextBuilder.ToString();
             }
+            
+            foreach (var msg in _messages)
+            {
+                if (msg.Role == "tool" || (msg.Type != null && (msg.Type == "tool_use" || msg.Type == "tool_result")))
+                {
+                    contextBuilder.AppendLine($"--- Tool: {msg.ToolName} ---");
+                    contextBuilder.AppendLine($"Input: {Serialize(msg.ToolInput)}");
+                    
+                    if (msg.ToolResult != null)
+                    {
+                        contextBuilder.AppendLine($"Result: {Serialize(msg.ToolResult)}");
+                    }
+                    else
+                    {
+                        contextBuilder.AppendLine("Result: [pending]");
+                    }
+                    contextBuilder.AppendLine();
+                }
+                else
+                {
+                    contextBuilder.AppendLine($"{msg.Role}: {msg.Content}");
+                    contextBuilder.AppendLine();
+                }
+            }
+            
+            return contextBuilder.ToString();
         }
         
-        return contextBuilder.ToString();
-    }
+        /// <summary>
+        /// Helper method to serialize objects to JSON
+        /// </summary>
+        private string Serialize(object obj)
+        {
+            if (obj == null) return "null";
+            
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+            }
+            catch (Exception)
+            {
+                return obj.ToString();
+            }
+        }
     
-    /// <summary>
-    /// Get debug info
-    /// </summary>
-    /// <returns>Debug info</returns>
-    public string GetDebugInfo()
-    {
-        var info = new StringBuilder();
-        
-        info.AppendLine($"Context Enabled: {IsContextEnabled}");
-        info.AppendLine($"Default Model: {DefaultModel}");
-        info.AppendLine($"Messages Count: {_messages.Count}");
-        info.AppendLine($"Has Summary: {!string.IsNullOrEmpty(_summarizedContext)}");
-        
-        return info.ToString();
-    }
+        /// <summary>
+        /// Get debug info
+        /// </summary>
+        /// <returns>Debug info</returns>
+        public string GetDebugInfo()
+        {
+            var info = new StringBuilder();
+            
+            info.AppendLine($"Context Enabled: {IsContextEnabled}");
+            info.AppendLine($"Default Model: {DefaultModel}");
+            info.AppendLine($"Messages Count: {_messages.Count}");
+            info.AppendLine($"Has Summary: {!string.IsNullOrEmpty(_summarizedContext)}");
+            
+            return info.ToString();
+        }
     
-    /// <summary>
-    /// Get timestamp of last message
-    /// </summary>
-    /// <returns>Last message timestamp</returns>
-    public DateTime GetLastMessageTimestamp()
-    {
-        return DateTime.Now; // Placeholder, should store timestamps with messages
-    }
+        /// <summary>
+        /// Get timestamp of last message
+        /// </summary>
+        /// <returns>Last message timestamp</returns>
+        public DateTime GetLastMessageTimestamp()
+        {
+            return DateTime.Now; // Placeholder, should store timestamps with messages
+        }
     }
 }
