@@ -29,5 +29,17 @@ namespace AIAgentTest.Services.Interfaces
         /// <param name="success">Whether the tool succeeded</param>
         /// <param name="errorMessage">Error message if the tool failed</param>
         void AddToolResult(string toolName, object toolResult, bool success, string errorMessage = null);
+        
+        /// <summary>
+        /// Get information about tool usage in the current context
+        /// </summary>
+        /// <returns>Tool usage information as a formatted string</returns>
+        string GetToolUsageInfo();
+        
+        /// <summary>
+        /// Get token statistics for the current context
+        /// </summary>
+        /// <returns>Token statistics as a formatted string</returns>
+        string GetTokenStatistics();
     }
 }

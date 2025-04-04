@@ -214,5 +214,14 @@ namespace AIAgentTest.Services
 
             return context.ToString();
         }
+        
+        /// <summary>
+        /// Refreshes the context (used when switching between chat sessions)
+        /// </summary>
+        public virtual void RefreshContext()
+        {
+            // Base implementation doesn't need special handling
+            // This method is overridden in derived classes
+        }
     }
 }

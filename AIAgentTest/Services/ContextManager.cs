@@ -151,5 +151,12 @@ namespace AIAgentTest.Services
 
             return context.ToString();
         }
+        
+        public void RefreshContext()
+        {
+            // For base context manager, we don't need to do anything special
+            // This method is mainly for derived classes that might need to
+            // rebuild or restore context when chat sessions are switched
+        }
     }
 }

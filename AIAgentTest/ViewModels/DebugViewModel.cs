@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using AIAgentTest.Commands;
+using AIAgentTest.Services;
 using AIAgentTest.Services.Interfaces;
+using AIAgentTest.Services.MCP;
 
 namespace AIAgentTest.ViewModels
 {
@@ -35,7 +38,6 @@ namespace AIAgentTest.ViewModels
         
         // Commands
         public ICommand ShowContextCommand { get; }
-        public ICommand ShowTechnicalContextCommand { get; }
         public ICommand ClearContextCommand { get; }
         public ICommand SummarizeContextCommand { get; }
         
@@ -48,8 +50,7 @@ namespace AIAgentTest.ViewModels
             _debugContent = "Debug window is initializing...";
             
             // Initialize commands
-            ShowContextCommand = new RelayCommand(ShowContext);
-            ShowTechnicalContextCommand = new RelayCommand(ShowTechnicalContext);
+            ShowContextCommand = new RelayCommand(ShowTechnicalContext);
             ClearContextCommand = new RelayCommand(ClearContext);
             SummarizeContextCommand = new RelayCommand(async () => await SummarizeContext());
             
@@ -72,60 +73,87 @@ namespace AIAgentTest.ViewModels
             }
         }
         
-        private void ShowContext()
+private void ShowTechnicalContext()
         {
             try 
             {
-                // Create a simplified context view for regular display
                 var contextBuilder = new StringBuilder();
                 contextBuilder.AppendLine("=== FULL CURRENT CONTEXT ===\n");
-                
-                // Get all messages from context
-                string fullContext = _contextManager.GetFullContext();
-                
-                // Create simplified view by filtering out detailed tool JSON
-                foreach (var line in fullContext.Split('\n'))
+
+                // Get the ChatSessionViewModel to access its data
+                var chatVM = ServiceProvider.GetService<ChatSessionViewModel>();
+                if (chatVM != null && chatVM.CurrentSession != null && chatVM.CurrentSession.Messages != null)
                 {
-                    // Include basic message lines but summarize tool sections
-                    if (line.StartsWith("--- Tool:"))
+                    // Show messages directly from the current session
+                    foreach (var message in chatVM.CurrentSession.Messages)
                     {
-                        // Add the tool header
-                        contextBuilder.AppendLine(line);
-                    }
-                    else if (line.StartsWith("Input:") || line.StartsWith("Result:"))
-                    {
-                        // Add a summary instead of full JSON
-                        if (line.Length > 50)
+                        // Add the basic message
+                        contextBuilder.AppendLine($"{message.Role}: {message.Content}");
+                        
+                        // Check for tool information in metadata
+                        if (message.Metadata != null)
                         {
-                            contextBuilder.AppendLine($"{line.Split(':')[0]}: [Details available in Technical Context view]");
+                            // Tool call code
+                            if (message.Metadata.ContainsKey("ToolCallJson"))
+                            {
+                                string toolName = message.Metadata.ContainsKey("ToolName") 
+                                    ? message.Metadata["ToolName"].ToString()
+                                    : "unknown";
+                                    
+                                contextBuilder.AppendLine($"--- TOOL CALL: {toolName} ---");
+                                contextBuilder.AppendLine(message.Metadata["ToolCallJson"].ToString());
+                            }
+                            
+                            // Tool result code
+                            if (message.Metadata.ContainsKey("ToolResultJson"))
+                            {
+                                string toolName = message.Metadata.ContainsKey("ToolName") 
+                                    ? message.Metadata["ToolName"].ToString()
+                                    : "unknown";
+                                    
+                                contextBuilder.AppendLine($"--- TOOL RESULT: {toolName} ---");
+                                contextBuilder.AppendLine(message.Metadata["ToolResultJson"].ToString());
+                            }
+                            
+                            // Full tool interaction if available
+                            if (message.Metadata.ContainsKey("FullToolInteraction") && 
+                                !message.Metadata.ContainsKey("ToolCallJson") && 
+                                !message.Metadata.ContainsKey("ToolResultJson"))
+                            {
+                                contextBuilder.AppendLine(message.Metadata["FullToolInteraction"].ToString());
+                            }
                         }
-                        else
-                        {
-                            contextBuilder.AppendLine(line);
-                        }
-                    }
-                    else
-                    {
-                        // Include all other lines
-                        contextBuilder.AppendLine(line);
+                        
+                        // Add a blank line after each message for readability
+                        contextBuilder.AppendLine();
                     }
                 }
+                else
+                {
+                    // Fallback to getting context from the context manager
+                    string context = _contextManager.GetFullContext();
+                    contextBuilder.AppendLine(context);
+                }
                 
-                DebugContent = string.IsNullOrEmpty(fullContext) ? "Context is empty." : contextBuilder.ToString();
-            }
-            catch (Exception ex)
-            {
-                DebugContent = $"Error getting context: {ex.Message}\n{ex.StackTrace}";
-            }
-        }
-        
-        private void ShowTechnicalContext()
-        {
-            try 
-            {
-                // Show the complete technical context with all details
-                string context = _contextManager.GetFullContext();
-                TechnicalContext = string.IsNullOrEmpty(context) ? "Context is empty." : context;
+                // Add token statistics
+                if (_contextManager is IMCPContextManager mcpContextManager)
+                {
+                    contextBuilder.AppendLine("\n=== TOOL CALLS ANALYSIS ===\n");
+                    contextBuilder.AppendLine(mcpContextManager.GetToolUsageInfo());
+                    
+                    // Add token statistics
+                    contextBuilder.AppendLine("\n=== TOKEN STATISTICS ===\n");
+                    contextBuilder.AppendLine(mcpContextManager.GetTokenStatistics());
+                }
+                else
+                {
+                    // Add basic token statistics
+                    contextBuilder.AppendLine("\n=== TOKEN STATISTICS ===\n");
+                    int totalTokens = TokenCounterUtility.EstimateTokenCount(contextBuilder.ToString());
+                    contextBuilder.AppendLine($"Approximate Context Size: {totalTokens} tokens");
+                }
+                
+                TechnicalContext = contextBuilder.ToString();
                 DebugContent = TechnicalContext;
             }
             catch (Exception ex)

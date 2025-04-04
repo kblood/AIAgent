@@ -15,5 +15,6 @@ namespace AIAgentTest.Services.Interfaces
         string GetDebugInfo();
         DateTime GetLastMessageTimestamp();
         Task SummarizeContext(string model);
+        void RefreshContext();
     }
 }

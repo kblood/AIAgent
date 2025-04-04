@@ -82,6 +82,12 @@ namespace AIAgentTest
                     ServiceProvider.GetService<MCPClientFactory>());
                 ServiceProvider.RegisterService<MCPServerManagerViewModel>(mcpServerManagerViewModel);
                 
+                // Create settings ViewModel
+                var settingsViewModel = new SettingsViewModel(
+                    llmClientService,
+                    mcpContextManager);
+                ServiceProvider.RegisterService<SettingsViewModel>(settingsViewModel);
+                
                 // Create main view model with MCP components
                 var mainViewModel = new MainViewModel(
                     themeService,
@@ -90,7 +96,8 @@ namespace AIAgentTest
                     debugViewModel,
                     chatSessionViewModel,
                     toolManagerViewModel,
-                    mcpServerManagerViewModel);
+                    mcpServerManagerViewModel,
+                    settingsViewModel);
                 ServiceProvider.RegisterService<MainViewModel>(mainViewModel);
             }
             catch (System.Exception ex)

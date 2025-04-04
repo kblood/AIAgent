@@ -10,6 +10,7 @@
     
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
     </Window.Resources>
     
     <DockPanel Background="{DynamicResource WindowBackground}">
@@ -105,6 +106,12 @@
             <TabItem Header="MCP Servers" 
                      Visibility="{Binding MCPServerManagerVM, Converter={StaticResource NullToVisibilityConverter}}">
                 <local:MCPServerManagerPanel DataContext="{Binding MCPServerManagerVM}" />
+            </TabItem>
+            
+            <!-- Settings Tab -->
+            <TabItem Header="Settings" 
+                     Visibility="{Binding SettingsVM, Converter={StaticResource NullToVisibilityConverter}}">
+                <local:SettingsPanel DataContext="{Binding SettingsVM}" />
             </TabItem>
         </TabControl>
     </DockPanel>

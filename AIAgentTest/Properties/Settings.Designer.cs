@@ -70,5 +70,125 @@ namespace AIAgentTest.Properties {
                 this["EnabledMCPServers"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableToolCalls {
+            get {
+                return ((bool)(this["EnableToolCalls"]));
+            }
+            set {
+                this["EnableToolCalls"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
+        public int ToolTimeout {
+            get {
+                return ((int)(this["ToolTimeout"]));
+            }
+            set {
+                this["ToolTimeout"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("4096")]
+        public int MaxContextLength {
+            get {
+                return ((int)(this["MaxContextLength"]));
+            }
+            set {
+                this["MaxContextLength"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnableContextSummarization {
+            get {
+                return ((bool)(this["EnableContextSummarization"]));
+            }
+            set {
+                this["EnableContextSummarization"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        public int SummarizationThreshold {
+            get {
+                return ((int)(this["SummarizationThreshold"]));
+            }
+            set {
+                this["SummarizationThreshold"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2048")]
+        public int MaxResponseLength {
+            get {
+                return ((int)(this["MaxResponseLength"]));
+            }
+            set {
+                this["MaxResponseLength"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.7")]
+        public double Temperature {
+            get {
+                return ((double)(this["Temperature"]));
+            }
+            set {
+                this["Temperature"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.9")]
+        public double TopP {
+            get {
+                return ((double)(this["TopP"]));
+            }
+            set {
+                this["TopP"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.0")]
+        public double FrequencyPenalty {
+            get {
+                return ((double)(this["FrequencyPenalty"]));
+            }
+            set {
+                this["FrequencyPenalty"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0.0")]
+        public double PresencePenalty {
+            get {
+                return ((double)(this["PresencePenalty"]));
+            }
+            set {
+                this["PresencePenalty"] = value;
+            }
+        }
     }
 }

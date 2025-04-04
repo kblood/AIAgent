@@ -109,6 +109,11 @@ namespace AIAgentTest.Services.MCP
         /// Error message if the operation failed
         /// </summary>
         public string Error { get; set; }
+        
+        /// <summary>
+        /// Additional metadata about the message
+        /// </summary>
+        public Dictionary<string, object> Metadata { get; set; }
     }
     
     /// <summary>
