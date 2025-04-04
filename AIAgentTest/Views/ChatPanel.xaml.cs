@@ -70,6 +70,16 @@ namespace AIAgentTest.Views
         
         private void AppendText(string text)
         {
+            // Handle special case for newlines
+            if (text == "\n")
+            {
+                var paragraphTemp = new Paragraph();
+                paragraphTemp.Inlines.Add(new Run(" "));
+                ConversationBox.Document.Blocks.Add(paragraphTemp);
+                ConversationBox.ScrollToEnd();
+                return;
+            }
+            
             var paragraph = ConversationBox.Document.Blocks.LastBlock as Paragraph;
             if (paragraph == null)
             {
@@ -146,6 +156,7 @@ namespace AIAgentTest.Views
             // Add debug output to verify this is called
             System.Diagnostics.Debug.WriteLine($"Adding code link for {language} code");
             
+            // Add to code window with both headers and result
             paragraph.Inlines.Add(link);
             ConversationBox.Document.Blocks.Add(paragraph);
             ConversationBox.ScrollToEnd();

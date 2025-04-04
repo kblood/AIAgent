@@ -34,7 +34,13 @@
                 <Button Content="Show Context" 
                         Command="{Binding ShowContextCommand}"
                         Style="{StaticResource StandardButton}"
-                        Margin="0,0,10,0"/>
+                        Margin="0,0,10,0"
+                        ToolTip="Show simplified context view"/>
+                <Button Content="Technical Context" 
+                        Command="{Binding ShowTechnicalContextCommand}"
+                        Style="{StaticResource StandardButton}"
+                        Margin="0,0,10,0"
+                        ToolTip="Show complete context including all tool details"/>
                 <Button Content="Clear Context" 
                         Command="{Binding ClearContextCommand}"
                         Style="{StaticResource StandardButton}"

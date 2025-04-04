@@ -318,9 +318,6 @@ namespace AIAgentTest.ViewModels
                             // Create a unified tool interaction block
                             string fullToolInteraction = toolHeader + toolCallText + "\n\n" + toolResultHeader + resultText;
                             
-                            // Display in chat - just show a simple message and rely on the code link
-                            AppendTextAction?.Invoke($"\n[Using {mcpResponse.Tool} tool - click link to view details]\n");
-                            
                             // Add to code window with both headers and result, but use "json" as the language identifier
                             HandleCodeAction?.Invoke("json", fullToolInteraction);
                             
@@ -595,7 +592,13 @@ namespace AIAgentTest.ViewModels
                     // Add to context
                     _contextManager.AddMessage(message.Role, message.Content);
                     
-                    // Display role
+                    // Always add a clean paragraph break between messages
+                    if (message != CurrentSession.Messages.First())
+                    {
+                        AppendTextAction?.Invoke("\n");
+                    }
+                    
+                    // Display role with a newline after
                     AppendTextAction?.Invoke($"{message.Role}: ");
                     
                     // Process message content
@@ -628,7 +631,6 @@ namespace AIAgentTest.ViewModels
                         message.Metadata.ContainsKey("ToolName"))
                     {
                         string toolName = message.Metadata["ToolName"].ToString();
-                        string toolResultHeader = $"[Result from {toolName} tool]\n";
                         
                         // Find the tool header if available
                         string toolHeader = "";
@@ -650,9 +652,6 @@ namespace AIAgentTest.ViewModels
                             resultJson = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
                         }
                         
-                        // Display a simple message in chat instead of the raw JSON
-                        AppendTextAction?.Invoke($"\n[Used {toolName} tool - click link to view details]\n");
-                        
                         // Get the tool call JSON if available
                         string toolCallJson = "";
                         if (message.Metadata.ContainsKey("ToolCallJson"))
@@ -661,7 +660,7 @@ namespace AIAgentTest.ViewModels
                         }
                         
                         // Create a unified tool interaction block with both tool call and result
-                        string fullToolInteraction = toolHeader + toolCallJson + "\n\n" + toolResultHeader + resultJson;
+                        string fullToolInteraction = toolHeader + toolCallJson + "\n\n" + $"[Tool result from {toolName}]\n" + resultJson;
                         
                         // Add to code window
                         HandleCodeAction?.Invoke("json", fullToolInteraction);

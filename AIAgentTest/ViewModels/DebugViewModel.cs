@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using AIAgentTest.Commands;
@@ -12,6 +13,7 @@ namespace AIAgentTest.ViewModels
         
         private bool _isVisible = true;
         private string _debugContent;
+        private string _technicalContext;
         
         public bool IsVisible
         {
@@ -25,8 +27,15 @@ namespace AIAgentTest.ViewModels
             set => SetProperty(ref _debugContent, value);
         }
         
+        public string TechnicalContext
+        {
+            get => _technicalContext;
+            set => SetProperty(ref _technicalContext, value);
+        }
+        
         // Commands
         public ICommand ShowContextCommand { get; }
+        public ICommand ShowTechnicalContextCommand { get; }
         public ICommand ClearContextCommand { get; }
         public ICommand SummarizeContextCommand { get; }
         
@@ -40,6 +49,7 @@ namespace AIAgentTest.ViewModels
             
             // Initialize commands
             ShowContextCommand = new RelayCommand(ShowContext);
+            ShowTechnicalContextCommand = new RelayCommand(ShowTechnicalContext);
             ClearContextCommand = new RelayCommand(ClearContext);
             SummarizeContextCommand = new RelayCommand(async () => await SummarizeContext());
             
@@ -66,12 +76,61 @@ namespace AIAgentTest.ViewModels
         {
             try 
             {
-                string context = _contextManager.GetFullContext();
-                DebugContent = string.IsNullOrEmpty(context) ? "Context is empty." : context;
+                // Create a simplified context view for regular display
+                var contextBuilder = new StringBuilder();
+                contextBuilder.AppendLine("=== FULL CURRENT CONTEXT ===\n");
+                
+                // Get all messages from context
+                string fullContext = _contextManager.GetFullContext();
+                
+                // Create simplified view by filtering out detailed tool JSON
+                foreach (var line in fullContext.Split('\n'))
+                {
+                    // Include basic message lines but summarize tool sections
+                    if (line.StartsWith("--- Tool:"))
+                    {
+                        // Add the tool header
+                        contextBuilder.AppendLine(line);
+                    }
+                    else if (line.StartsWith("Input:") || line.StartsWith("Result:"))
+                    {
+                        // Add a summary instead of full JSON
+                        if (line.Length > 50)
+                        {
+                            contextBuilder.AppendLine($"{line.Split(':')[0]}: [Details available in Technical Context view]");
+                        }
+                        else
+                        {
+                            contextBuilder.AppendLine(line);
+                        }
+                    }
+                    else
+                    {
+                        // Include all other lines
+                        contextBuilder.AppendLine(line);
+                    }
+                }
+                
+                DebugContent = string.IsNullOrEmpty(fullContext) ? "Context is empty." : contextBuilder.ToString();
             }
             catch (Exception ex)
             {
                 DebugContent = $"Error getting context: {ex.Message}\n{ex.StackTrace}";
+            }
+        }
+        
+        private void ShowTechnicalContext()
+        {
+            try 
+            {
+                // Show the complete technical context with all details
+                string context = _contextManager.GetFullContext();
+                TechnicalContext = string.IsNullOrEmpty(context) ? "Context is empty." : context;
+                DebugContent = TechnicalContext;
+            }
+            catch (Exception ex)
+            {
+                DebugContent = $"Error getting technical context: {ex.Message}\n{ex.StackTrace}";
             }
         }
         
