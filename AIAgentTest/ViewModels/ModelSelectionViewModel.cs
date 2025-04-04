@@ -3,7 +3,9 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using AIAgentTest.Commands;
+using AIAgentTest.Services;
 using AIAgentTest.Services.Interfaces;
+using AIAgentTest.Services.MCP;
 
 namespace AIAgentTest.ViewModels
 {
@@ -13,6 +15,7 @@ namespace AIAgentTest.ViewModels
         
         private ObservableCollection<string> _availableModels;
         private string _selectedModel;
+        private bool _showMCPStatus = true;
         
         public ObservableCollection<string> AvailableModels
         {
@@ -23,7 +26,28 @@ namespace AIAgentTest.ViewModels
         public string SelectedModel
         {
             get => _selectedModel;
-            set => SetProperty(ref _selectedModel, value);
+            set
+            {
+                if (SetProperty(ref _selectedModel, value))
+                {
+                    OnPropertyChanged(nameof(CurrentModelSupportsMCP));
+                }
+            }
+        }
+        
+        public bool ShowMCPStatus
+        {
+            get => _showMCPStatus;
+            set => SetProperty(ref _showMCPStatus, value);
+        }
+        
+        public bool CurrentModelSupportsMCP
+        {
+            get
+            {
+                var mcpLLMClientService = ServiceProvider.GetService<IMCPLLMClientService>();
+                return mcpLLMClientService?.ModelSupportsMCP(SelectedModel) ?? false;
+            }
         }
         
         // Commands

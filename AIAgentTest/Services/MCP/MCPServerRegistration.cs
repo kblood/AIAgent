@@ -1,84 +1,165 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using AIAgentTest.API_Clients.MCP;
-using AIAgentTest.Services.Interfaces;
+using System.Linq;
 
 namespace AIAgentTest.Services.MCP
 {
     /// <summary>
-    /// Helper class for registering external MCP servers
+    /// Helper for registering MCP servers
     /// </summary>
     public static class MCPServerRegistration
     {
         /// <summary>
-        /// Registers MCP servers with the factory
+        /// MCP Server configuration class
+        /// </summary>
+        public class MCPServerConfig
+        {
+            public string Command { get; set; }
+            public string[] Args { get; set; }
+            [JsonIgnore]
+            public bool IsEnabled { get; set; } = true;
+        }
+        
+        /// <summary>
+        /// MCP Servers configuration class
+        /// </summary>
+        public class MCPServersConfig
+        {
+            public Dictionary<string, MCPServerConfig> McpServers { get; set; } = new Dictionary<string, MCPServerConfig>();
+        }
+
+        /// <summary>
+        /// Register MCP servers from settings
         /// </summary>
         /// <param name="mcpClientFactory">MCP client factory</param>
+        /// <returns>Task</returns>
         public static async Task RegisterMCPServersAsync(MCPClientFactory mcpClientFactory)
         {
-            // Register the filesystem MCP server if available
-            await TryRegisterFileSystemServerAsync(mcpClientFactory);
+            if (mcpClientFactory == null)
+                throw new ArgumentNullException(nameof(mcpClientFactory));
             
-            // Add other server registrations as needed
-        }
-        
-        /// <summary>
-        /// Attempts to register the filesystem MCP server
-        /// </summary>
-        private static async Task TryRegisterFileSystemServerAsync(MCPClientFactory mcpClientFactory)
-        {
+            var serversString = Properties.Settings.Default.MCPServers;
+            if (string.IsNullOrEmpty(serversString))
+                return;
+            
+            // Try to parse the server config as JSON first (ModelContextProtocol standard)
             try
             {
-                // Get the server URL from settings (or use a default)
-                var serverUrl = GetSettingOrDefault("FileSystemMCPServerUrl", "http://localhost:3000");
-                
-                // Create the server client
-                var fileSystemServer = new FileSystemMCPServerClient(serverUrl);
-                
-                // Check if the server is available
-                if (await fileSystemServer.IsAvailableAsync())
+                var serversConfig = JsonSerializer.Deserialize<MCPServersConfig>(serversString);
+                if (serversConfig?.McpServers != null)
                 {
-                    // Register with the factory
-                    mcpClientFactory.RegisterMCPServer("filesystem", fileSystemServer);
+                    // Get enabled servers from settings
+                    var enabledServers = new HashSet<string>();
+                    var disabledServers = new HashSet<string>();
                     
-                    Console.WriteLine("FileSystem MCP Server registered successfully");
-                    
-                    // Get available tools from the server
-                    var tools = await fileSystemServer.GetAvailableToolsAsync();
-                    
-                    // Get the tool registry
-                    var toolRegistry = ServiceProvider.GetService<IToolRegistry>();
-                    
-                    // Register tools with the registry
-                    foreach (var tool in tools)
+                    var enabledServersStr = Properties.Settings.Default.EnabledMCPServers;
+                    if (!string.IsNullOrEmpty(enabledServersStr))
                     {
-                        toolRegistry.RegisterTool(tool, async (parameters) => {
-                            // Execute the tool on the server
-                            return await fileSystemServer.ExecuteToolAsync(tool.Name, parameters);
-                        });
-                        
-                        Console.WriteLine($"Registered external tool: {tool.Name}");
+                        var serverEntries = enabledServersStr.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var server in serverEntries)
+                        {
+                            if (server.StartsWith("!"))
+                                disabledServers.Add(server.Substring(1));
+                            else
+                                enabledServers.Add(server);
+                        }
                     }
-                }
-                else
-                {
-                    Console.WriteLine("FileSystem MCP Server is not available");
+                    
+                    foreach (var serverEntry in serversConfig.McpServers)
+                    {
+                        try
+                        {
+                            var name = serverEntry.Key;
+                            var config = serverEntry.Value;
+                            
+                            // Check if explicitly enabled/disabled
+                            if (enabledServers.Count > 0 || disabledServers.Count > 0)
+                            {
+                                config.IsEnabled = !disabledServers.Contains(name) && 
+                                              (enabledServers.Count == 0 || enabledServers.Contains(name));
+                            }
+                            
+                            if (!config.IsEnabled)
+                                continue;
+                                
+                            RegisterServerFromConfig(mcpClientFactory, name, config);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error registering MCP server {serverEntry.Key}: {ex.Message}");
+                        }
+                    }
+                    
+                    // Successfully parsed JSON config, no need to try the legacy format
+                    return;
                 }
             }
-            catch (Exception ex)
+            catch 
             {
-                Console.WriteLine($"Error registering FileSystem MCP Server: {ex.Message}");
+                // Not valid JSON, try legacy format
+            }
+            
+            // Legacy format: name|url|type|enabled
+            var serversList = serversString.Split(';');
+            
+            foreach (var serverString in serversList.Where(s => !string.IsNullOrWhiteSpace(s)))
+            {
+                try
+                {
+                    var parts = serverString.Split('|');
+                    if (parts.Length < 3)
+                        continue;
+                    
+                    var name = parts[0];
+                    var url = parts[1];
+                    var type = parts[2];
+                    var isEnabled = parts.Length > 3 && bool.TryParse(parts[3], out bool enabled) && enabled;
+                    
+                    if (!isEnabled)
+                        continue;
+                    
+                    // Register the server based on type
+                    switch (type.ToLowerInvariant())
+                    {
+                        case "filesystem":
+                            // Use default npx command for filesystem
+                            var config = new MCPServerConfig
+                            {
+                                Command = "npx",
+                                Args = new[] { "-y", "@modelcontextprotocol/server-filesystem", url },
+                                IsEnabled = true
+                            };
+                            RegisterServerFromConfig(mcpClientFactory, name, config);
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error registering MCP server: {ex.Message}");
+                }
             }
         }
         
         /// <summary>
-        /// Gets a setting or returns a default value
+        /// Register a server from its configuration
         /// </summary>
-        private static string GetSettingOrDefault(string key, string defaultValue)
+        /// <param name="mcpClientFactory">MCP client factory</param>
+        /// <param name="name">Server name</param>
+        /// <param name="config">Server configuration</param>
+        private static void RegisterServerFromConfig(MCPClientFactory mcpClientFactory, string name, MCPServerConfig config)
         {
-            // In a real implementation, this would get the setting from a configuration source
-            return defaultValue;
+            if (string.Equals(config.Command, "npx", StringComparison.OrdinalIgnoreCase) &&
+                config.Args.Length > 0 && 
+                config.Args[0].Contains("@modelcontextprotocol/server-filesystem"))
+            {
+                var fileSystemServer = new FileSystemMCPServerClient(config.Command, config.Args);
+                mcpClientFactory.RegisterMCPServer(name, fileSystemServer);
+            }
+            // Add other server types as needed
         }
     }
 }

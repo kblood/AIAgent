@@ -16,6 +16,12 @@ namespace AIAgentTest.API_Clients
         Task<List<string>> GetAvailableModelsAsync();
 
         /// <summary>
+        /// Gets a list of available models from the provider (alias for backward compatibility)
+        /// </summary>
+        /// <returns>A list of model identifiers</returns>
+        Task<List<string>> GetModelsAsync() => GetAvailableModelsAsync();
+
+        /// <summary>
         /// Generates a text response from the LLM
         /// </summary>
         /// <param name="prompt">The prompt to send to the LLM</param>
@@ -24,12 +30,28 @@ namespace AIAgentTest.API_Clients
         Task<string> GenerateTextResponseAsync(string prompt, string model = null);
         
         /// <summary>
+        /// Generates a text response from the LLM (alias for backward compatibility)
+        /// </summary>
+        /// <param name="prompt">The prompt to send to the LLM</param>
+        /// <param name="model">The model identifier to use (optional)</param>
+        /// <returns>The generated text response</returns>
+        Task<string> GenerateTextAsync(string prompt, string model = null) => GenerateTextResponseAsync(prompt, model);
+        
+        /// <summary>
         /// Generates a text response from the LLM with streaming capability
         /// </summary>
         /// <param name="prompt">The prompt to send to the LLM</param>
         /// <param name="model">The model identifier to use (optional)</param>
         /// <returns>An async enumerable of response chunks</returns>
         IAsyncEnumerable<string> GenerateStreamResponseAsync(string prompt, string model = null);
+        
+        /// <summary>
+        /// Generates a text response from the LLM with streaming capability (alias for backward compatibility)
+        /// </summary>
+        /// <param name="prompt">The prompt to send to the LLM</param>
+        /// <param name="model">The model identifier to use (optional)</param>
+        /// <returns>An async enumerable of response chunks</returns>
+        IAsyncEnumerable<string> GenerateStreamTextAsync(string prompt, string model = null) => GenerateStreamResponseAsync(prompt, model);
         
         /// <summary>
         /// Processes an image and generates a text response 

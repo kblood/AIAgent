@@ -44,17 +44,5 @@ namespace AIAgentTest.Services.MCP
             // Register MCP servers
             MCPServerRegistration.RegisterMCPServersAsync(mcpClientFactory).ConfigureAwait(false);
         }
-        
-        /// <summary>
-        /// Creates an Ollama MCP adapter
-        /// </summary>
-        public static OllamaMCPAdapter CreateOllamaMCPAdapter()
-        {
-            var ollamaClient = (OllamaClient)LLMClientFactory.GetClient(LLMClientFactory.ProviderType.Ollama);
-            var messageParsingService = ServiceProvider.GetService<IMessageParsingService>();
-            var toolRegistry = ServiceProvider.GetService<IToolRegistry>();
-            
-            return new OllamaMCPAdapter(ollamaClient, messageParsingService, toolRegistry);
-        }
     }
 }

@@ -87,6 +87,72 @@ namespace AIAgentTest.ViewModels
                 return; // No servers configured
             }
             
+            // Get enabled/disabled server settings
+            var enabledServers = new HashSet<string>();
+            var disabledServers = new HashSet<string>();
+            
+            var enabledServersStr = Properties.Settings.Default.EnabledMCPServers;
+            if (!string.IsNullOrEmpty(enabledServersStr))
+            {
+                var serverEntries = enabledServersStr.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var server in serverEntries)
+                {
+                    if (server.StartsWith("!"))
+                        disabledServers.Add(server.Substring(1));
+                    else
+                        enabledServers.Add(server);
+                }
+            }
+            
+            // Try parsing as JSON (ModelContextProtocol standard)
+            try
+            {
+                var serversConfig = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, object>>>(serversString);
+                
+                if (serversConfig != null && serversConfig.ContainsKey("mcpServers"))
+                {
+                    var mcpServers = serversConfig["mcpServers"] as Dictionary<string, object>;
+                    
+                    foreach (var serverEntry in mcpServers)
+                    {
+                        var name = serverEntry.Key;
+                        var configObj = serverEntry.Value as Dictionary<string, object>;
+                        
+                        if (configObj != null && configObj.TryGetValue("command", out var cmdObj) && 
+                            configObj.TryGetValue("args", out var argsObj))
+                        {
+                            string command = cmdObj.ToString();
+                            var argsArray = System.Text.Json.JsonSerializer.Deserialize<string[]>(argsObj.ToString());
+                            
+                            var server = new MCPServerViewModel
+                            {
+                                Name = name,
+                                Command = command,
+                                Args = argsArray,
+                                IsEnabled = !disabledServers.Contains(name) && 
+                                           (enabledServers.Count == 0 || enabledServers.Contains(name))
+                            };
+                            
+                            Servers.Add(server);
+                            
+                            // Register enabled servers with the factory
+                            if (server.IsEnabled)
+                            {
+                                RegisterServer(server);
+                            }
+                        }
+                    }
+                    
+                    // JSON loaded successfully, return
+                    return;
+                }
+            }
+            catch
+            {
+                // Not a valid JSON or error, try legacy format
+            }
+            
+            // Legacy format
             var serverList = serversString.Split(';');
             
             foreach (var serverString in serverList)
@@ -96,20 +162,41 @@ namespace AIAgentTest.ViewModels
                 var parts = serverString.Split('|');
                 if (parts.Length < 3) continue;
                 
-                var server = new MCPServerViewModel
-                {
-                    Name = parts[0],
-                    Url = parts[1],
-                    Type = parts[2],
-                    IsEnabled = parts.Length > 3 && bool.TryParse(parts[3], out bool enabled) && enabled
-                };
+                var name = parts[0];
+                var url = parts[1];
+                var type = parts[2];
+                var isEnabledStr = parts.Length > 3 && bool.TryParse(parts[3], out bool enabled) && enabled;
                 
-                Servers.Add(server);
+                // Check specific enable/disable settings
+                var isEnabled = !disabledServers.Contains(name) && 
+                               (enabledServers.Count == 0 || enabledServers.Contains(name) || isEnabledStr);
                 
-                // Register enabled servers with the factory
-                if (server.IsEnabled)
+                // For legacy format, create appropriate Args based on type
+                string command = "npx";
+                string[] args = null;
+                
+                if (type.ToLowerInvariant() == "filesystem")
                 {
-                    RegisterServer(server);
+                    args = new[] { "-y", "@modelcontextprotocol/server-filesystem", url };
+                }
+                
+                if (args != null)
+                {
+                    var server = new MCPServerViewModel
+                    {
+                        Name = name,
+                        Command = command,
+                        Args = args,
+                        IsEnabled = isEnabled
+                    };
+                    
+                    Servers.Add(server);
+                    
+                    // Register enabled servers with the factory
+                    if (server.IsEnabled)
+                    {
+                        RegisterServer(server);
+                    }
                 }
             }
         }
@@ -119,15 +206,41 @@ namespace AIAgentTest.ViewModels
         /// </summary>
         private void SaveServers()
         {
-            // Save to application settings
-            var serverStrings = new List<string>();
+            // Save to application settings - using MCP standard format
+            var mcpConfig = new Dictionary<string, Dictionary<string, object>>();
+            var serverConfigs = new Dictionary<string, object>();
             
             foreach (var server in Servers)
             {
-                serverStrings.Add($"{server.Name}|{server.Url}|{server.Type}|{server.IsEnabled}");
+                serverConfigs[server.Name] = new Dictionary<string, object>
+                {
+                    { "command", server.Command },
+                    { "args", server.Args }
+                };
             }
             
-            Properties.Settings.Default.MCPServers = string.Join(";", serverStrings);
+            mcpConfig["mcpServers"] = serverConfigs;
+            
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
+            
+            Properties.Settings.Default.MCPServers = System.Text.Json.JsonSerializer.Serialize(mcpConfig, options);
+            
+            // Save enabled/disabled server state
+            var enabledServers = new List<string>();
+            var disabledServers = new List<string>();
+            
+            foreach (var server in Servers)
+            {
+                if (server.IsEnabled)
+                    enabledServers.Add(server.Name);
+                else
+                    disabledServers.Add("!" + server.Name);
+            }
+            
+            Properties.Settings.Default.EnabledMCPServers = string.Join(";", enabledServers.Concat(disabledServers));
             Properties.Settings.Default.Save();
         }
         
@@ -138,20 +251,23 @@ namespace AIAgentTest.ViewModels
         {
             if (!server.IsEnabled) return;
             
-            // Create the appropriate server client based on server type
-            // This will need to be adapted based on the actual server client implementations
-            switch (server.Type.ToLowerInvariant())
+            try
             {
-                case "filesystem":
-                    var fileSystemServer = new FileSystemMCPServerClient(server.Url);
-                    _mcpClientFactory.RegisterMCPServer(server.Name, fileSystemServer);
-                    break;
-                case "database":
-                    // Example: _mcpClientFactory.RegisterMCPServer(server.Name, new DatabaseMCPServerClient(server.Url));
-                    break;
-                case "custom":
-                    // Example: _mcpClientFactory.RegisterMCPServer(server.Name, new CustomMCPServerClient(server.Url));
-                    break;
+                // Create the appropriate server client based on server type
+                switch (server.Type.ToLowerInvariant())
+                {
+                    case "filesystem":
+                        var fileSystemServer = new FileSystemMCPServerClient(server.Command, server.Args);
+                        _mcpClientFactory.RegisterMCPServer(server.Name, fileSystemServer);
+                        break;
+                    case "custom":
+                        // TODO: Support other server types as needed
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error registering server {server.Name}: {ex.Message}");
             }
         }
         
@@ -179,8 +295,8 @@ namespace AIAgentTest.ViewModels
                 var newServer = new MCPServerViewModel
                 {
                     Name = viewModel.Name,
-                    Url = viewModel.Url,
-                    Type = viewModel.Type,
+                    Command = viewModel.Command,
+                    Args = viewModel.Args,
                     IsEnabled = viewModel.IsEnabled
                 };
                 
@@ -215,8 +331,8 @@ namespace AIAgentTest.ViewModels
                 
                 // Update server from the editor
                 SelectedServer.Name = viewModel.Name;
-                SelectedServer.Url = viewModel.Url;
-                SelectedServer.Type = viewModel.Type;
+                SelectedServer.Command = viewModel.Command;
+                SelectedServer.Args = viewModel.Args;
                 SelectedServer.IsEnabled = viewModel.IsEnabled;
                 
                 // Handle registration changes
@@ -281,15 +397,38 @@ namespace AIAgentTest.ViewModels
             
             try
             {
-                // This is a simplified version that simulates testing the connection
-                // In a real implementation, you would create the appropriate server client
-                // and call its IsAvailableAsync method
-                await Task.Delay(1000); // Simulate network delay
+                // Create a temporary client to test the connection
+                IMCPServerClient client = null;
                 
-                // Simulate a successful connection
-                SelectedServer.IsConnected = true;
-                SelectedServer.LastConnectionAttempt = DateTime.Now;
-                SelectedServer.AvailableToolCount = new Random().Next(1, 10); // Simulate tools
+                switch (SelectedServer.Type.ToLowerInvariant())
+                {
+                    case "filesystem":
+                        client = new FileSystemMCPServerClient(SelectedServer.Command, SelectedServer.Args);
+                        break;
+                }
+                
+                if (client != null)
+                {
+                    // Test the connection
+                    bool isAvailable = await client.IsAvailableAsync();
+                    SelectedServer.IsConnected = isAvailable;
+                    
+                    if (isAvailable)
+                    {
+                        // Get available tools
+                        var tools = await client.GetToolsAsync();
+                        SelectedServer.AvailableToolCount = tools.Count;
+                    }
+                    else
+                    {
+                        SelectedServer.ConnectionError = "Failed to connect to server";
+                    }
+                }
+                else
+                {
+                    SelectedServer.IsConnected = false;
+                    SelectedServer.ConnectionError = "Unsupported server type";
+                }
             }
             catch (Exception ex)
             {
@@ -299,6 +438,7 @@ namespace AIAgentTest.ViewModels
             finally
             {
                 SelectedServer.IsConnecting = false;
+                SelectedServer.LastConnectionAttempt = DateTime.Now;
             }
         }
         

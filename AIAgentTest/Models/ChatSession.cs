@@ -36,5 +36,6 @@ namespace AIAgentTest.Models
         public string Content { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.Now;
         public string ImagePath { get; set; }  // Added for image support
+        public Dictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();  // Added for MCP support
     }
 }

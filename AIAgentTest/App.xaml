@@ -1,6 +1,7 @@
 <Application x:Class="AIAgentTest.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:AIAgentTest.Views">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -24,6 +25,8 @@
             
             <!-- Converters -->
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+            <local:BoolToStringConverter x:Key="BoolToEditModeConverter" TrueValue="Edit MCP Server" FalseValue="Add MCP Server"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

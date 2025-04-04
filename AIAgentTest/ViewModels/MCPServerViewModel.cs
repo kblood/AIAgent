@@ -8,17 +8,17 @@ namespace AIAgentTest.ViewModels
     public class MCPServerViewModel : ViewModelBase
     {
         private string _name;
-        private string _url;
-        private string _type;
+        private string _command;
+        private string[] _args;
         private bool _isEnabled;
         private bool _isConnected;
         private bool _isConnecting;
         private DateTime? _lastConnectionAttempt;
-        private string _connectionError;
         private int _availableToolCount;
+        private string _connectionError;
         
         /// <summary>
-        /// Name of the server
+        /// Server name
         /// </summary>
         public string Name
         {
@@ -27,21 +27,56 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
-        /// URL of the server
+        /// Server command
         /// </summary>
-        public string Url
+        public string Command
         {
-            get => _url;
-            set => SetProperty(ref _url, value);
+            get => _command;
+            set => SetProperty(ref _command, value);
         }
         
         /// <summary>
-        /// Type of the server (e.g., "filesystem", "database", "custom")
+        /// Server arguments
+        /// </summary>
+        public string[] Args
+        {
+            get => _args;
+            set => SetProperty(ref _args, value);
+        }
+        
+        /// <summary>
+        /// Server type (derived from command and args)
         /// </summary>
         public string Type
         {
-            get => _type;
-            set => SetProperty(ref _type, value);
+            get
+            {
+                if (_command == "npx" && _args != null && _args.Length > 0)
+                {
+                    if (_args[0].Contains("server-filesystem") || 
+                        (_args.Length > 1 && _args[1].Contains("server-filesystem")))
+                    {
+                        return "filesystem";
+                    }
+                }
+                return "custom";
+            }
+        }
+        
+        /// <summary>
+        /// Gets a display-friendly URL or path from the arguments
+        /// </summary>
+        public string DisplayPath
+        {
+            get
+            {
+                if (_args != null && _args.Length > 0)
+                {
+                    // For filesystem, the last argument is typically the path
+                    return _args.LastOrDefault() ?? "";
+                }
+                return "";
+            }
         }
         
         /// <summary>
@@ -63,7 +98,7 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
-        /// Whether the server is currently connecting
+        /// Whether the server is connecting
         /// </summary>
         public bool IsConnecting
         {
@@ -72,7 +107,7 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
-        /// Last time a connection attempt was made
+        /// When the server was last checked
         /// </summary>
         public DateTime? LastConnectionAttempt
         {
@@ -81,21 +116,21 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
-        /// Error message from the last connection attempt
-        /// </summary>
-        public string ConnectionError
-        {
-            get => _connectionError;
-            set => SetProperty(ref _connectionError, value);
-        }
-        
-        /// <summary>
-        /// Number of available tools on the server
+        /// Number of available tools
         /// </summary>
         public int AvailableToolCount
         {
             get => _availableToolCount;
             set => SetProperty(ref _availableToolCount, value);
+        }
+        
+        /// <summary>
+        /// Connection error message
+        /// </summary>
+        public string ConnectionError
+        {
+            get => _connectionError;
+            set => SetProperty(ref _connectionError, value);
         }
     }
 }

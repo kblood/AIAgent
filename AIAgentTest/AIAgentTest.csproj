@@ -10,7 +10,7 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <Compile Remove="ViewModels\ChatSessionViewModel.mcp.cs" />
+    <Compile Remove="ViewModels\ChatSessionViewModel.standard.cs" />
   </ItemGroup>
 
   <ItemGroup>

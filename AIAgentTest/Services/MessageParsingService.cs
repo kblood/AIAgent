@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 namespace AIAgentTest.Services
 {
@@ -13,6 +14,15 @@ namespace AIAgentTest.Services
 
         public void ProcessMessage(string message, Action<string> textCallback, Action<string, string> codeCallback)
         {
+            // First check if this is a tool call or tool result message
+            if (IsToolInteractionMessage(message))
+            {
+                Debug.WriteLine("Processing as tool interaction message");
+                ProcessToolInteractionMessage(message, textCallback, codeCallback);
+                return;
+            }
+
+            // Standard code block extraction
             string pattern = @"```(\w*)\r?\n(.*?)\r?\n```|```(\w*)\s*(.*?)```";
             int lastIndex = 0;
 
@@ -39,6 +49,117 @@ namespace AIAgentTest.Services
             if (!string.IsNullOrWhiteSpace(remaining))
             {
                 textCallback(remaining);
+            }
+        }
+        
+        // New method to check if a message appears to be a tool interaction
+        private bool IsToolInteractionMessage(string message)
+        {
+            // Check for tool headers
+            if (message.Contains("[Using") && message.Contains("tool...]"))
+                return true;
+                
+            if (message.Contains("[Tool result from"))
+                return true;
+                
+            // Check for JSON format that looks like a tool call
+            if (message.Contains("\"type\":") && message.Contains("\"tool_input\":"))
+                return true;
+                
+            return false;
+        }
+        
+        // New method to process tool interaction messages
+        private void ProcessToolInteractionMessage(string message, Action<string> textCallback, Action<string, string> codeCallback)
+        {
+            Debug.WriteLine("Processing tool interaction message: " + message.Substring(0, Math.Min(50, message.Length)));
+            
+            // Try to extract tool call sections
+            var toolHeaderMatch = Regex.Match(message, @"\[Using (.*?) tool\.\.\.\]");
+            var resultHeaderMatch = Regex.Match(message, @"\[Tool result from (.*?)\]");
+            
+            // If both parts are found, try to process as a complete tool interaction
+            if (toolHeaderMatch.Success && resultHeaderMatch.Success)
+            {
+                string toolName = toolHeaderMatch.Groups[1].Value;
+                Debug.WriteLine($"Found tool interaction for {toolName}");
+                
+                // Extract the JSON parts - tool call and result
+                var jsonMatches = Regex.Matches(message, @"\{.*?\}", RegexOptions.Singleline);
+                
+                if (jsonMatches.Count >= 2)
+                {
+                    string toolCallJson = jsonMatches[0].Value;
+                    string resultJson = jsonMatches[1].Value;
+                    
+                    // Format for display
+                    string toolHeader = $"[Using {toolName} tool...]\n";
+                    string resultHeader = $"[Tool result from {toolName}]\n";
+                    string formattedToolCallJson = FormatJson(toolCallJson);
+                    string formattedResultJson = FormatJson(resultJson);
+                    
+                    // Display a simplified message in the chat instead of the raw JSON
+                    textCallback($"[Tool interaction - view code for details]\n");
+                    
+                    // Create unified code block
+                    string fullToolInteraction = 
+                        toolHeader + formattedToolCallJson + "\n\n" + 
+                        resultHeader + formattedResultJson;
+                    
+                    codeCallback("json", fullToolInteraction);
+                    OnCodeExtracted(fullToolInteraction, "json");
+                    
+                    return;
+                }
+            }
+            
+            // If we couldn't parse as a tool interaction, process normally
+            Debug.WriteLine("Falling back to normal message processing");
+            
+            // Standard code block extraction
+            string pattern = @"```(\w*)\r?\n(.*?)\r?\n```|```(\w*)\s*(.*?)```";
+            int lastIndex = 0;
+
+            var matches = Regex.Matches(message, pattern, RegexOptions.Singleline);
+
+            foreach (Match match in matches)
+            {
+                string textBefore = message.Substring(lastIndex, match.Index - lastIndex);
+                if (!string.IsNullOrWhiteSpace(textBefore))
+                {
+                    textCallback(textBefore);
+                }
+
+                string language = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[3].Value;
+                string code = match.Groups[2].Success ? match.Groups[2].Value : match.Groups[4].Value;
+
+                codeCallback(language, code.Trim());
+                OnCodeExtracted(code.Trim(), language);
+
+                lastIndex = match.Index + match.Length;
+            }
+
+            string remaining = message.Substring(lastIndex);
+            if (!string.IsNullOrWhiteSpace(remaining))
+            {
+                textCallback(remaining);
+            }
+        }
+        
+        // Helper method to format JSON for display
+        private string FormatJson(string json)
+        {
+            try
+            {
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                var obj = JsonSerializer.Deserialize<object>(json);
+                return JsonSerializer.Serialize(obj, options);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error formatting JSON: {ex.Message}");
+                // If parsing fails, return the original
+                return json;
             }
         }
 
@@ -134,29 +255,84 @@ namespace AIAgentTest.Services
                     }
                 }
                 
-                // Alternate format - try to find function call in JSON 
-                var jsonMatch = Regex.Match(text, @"\{[\s\S]*?""name""[\s\S]*?:[\s\S]*?""(.*?)""[\s\S]*?""arguments""[\s\S]*?:[\s\S]*?\{([\s\S]*?)\}[\s\S]*?\}");
-                if (jsonMatch.Success)
+                // Look for tool call in standard JSON format with type and tool_input
+                try
                 {
-                    var functionName = jsonMatch.Groups[1].Value;
-                    var argumentsJson = $"{{{jsonMatch.Groups[2].Value}}}";
+                    // Check if the whole text is a JSON object
+                    if (text.TrimStart().StartsWith("{") && text.TrimEnd().EndsWith("}"))
+                    {
+                        var jsonObject = JsonSerializer.Deserialize<Dictionary<string, object>>(text);
+                        
+                        // Format 1: {"type": "tool_name", "tool_input": {...}}
+                        if (jsonObject.ContainsKey("type") && jsonObject.ContainsKey("tool_input"))
+                        {
+                            var toolName = jsonObject["type"].ToString();
+                            Dictionary<string, object> parameters;
+                            
+                            // Handle different formats of tool_input
+                            if (jsonObject["tool_input"] is JsonElement jsonElement)
+                            {
+                                parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                                    jsonElement.GetRawText());
+                            }
+                            else
+                            {
+                                parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                                    JsonSerializer.Serialize(jsonObject["tool_input"]));
+                            }
+                            
+                            return (toolName, parameters, ""); // No preamble if it's a full JSON object
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to parse complete JSON format: {ex.Message}");
+                }
+                
+                // Try to extract tool call using regex
+                var toolJsonMatch = Regex.Match(text, @"\{\s*""type""\s*:\s*""(.*?)"".*?""tool_input""\s*:\s*(\{.*?\})", RegexOptions.Singleline);
+                if (toolJsonMatch.Success)
+                {
+                    var toolName = toolJsonMatch.Groups[1].Value;
+                    var parametersJson = toolJsonMatch.Groups[2].Value;
+                    
+                    try
+                    {
+                        var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(parametersJson);
+                        var textBeforeCall = text.Substring(0, toolJsonMatch.Index).Trim();
+                        
+                        return (toolName, parameters, textBeforeCall);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Failed to parse tool_input: {ex.Message}");
+                    }
+                }
+                
+                // Alternate format - try to find function call in JSON 
+                var functionMatch = Regex.Match(text, @"\{[\s\S]*?""name""[\s\S]*?:[\s\S]*?""(.*?)""[\s\S]*?""arguments""[\s\S]*?:[\s\S]*?\{([\s\S]*?)\}[\s\S]*?\}");
+                if (functionMatch.Success)
+                {
+                    var functionName = functionMatch.Groups[1].Value;
+                    var argumentsJson = $"{{{functionMatch.Groups[2].Value}}}";
                     
                     try
                     {
                         var arguments = JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson);
-                        var textBeforeCall = text.Substring(0, jsonMatch.Index).Trim();
+                        var textBeforeCall = text.Substring(0, functionMatch.Index).Trim();
                         
                         return (functionName, arguments, textBeforeCall);
                     }
                     catch
                     {
-                        // JSON parsing failed
+                        Debug.WriteLine("Failed to parse function arguments");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error extracting tool call: {ex.Message}");
+                Debug.WriteLine($"Error extracting tool call: {ex.Message}");
             }
             
             return (null, null, null);

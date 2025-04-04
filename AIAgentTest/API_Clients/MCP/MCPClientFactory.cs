@@ -70,6 +70,13 @@ namespace AIAgentTest.API_Clients.MCP
         /// </summary>
         /// <param name="modelName">Model name</param>
         /// <returns>MCP-capable LLM client</returns>
+        public IMCPLLMClient GetMCPClient(string modelName) => GetClientForModel(modelName);
+
+        /// <summary>
+        /// Gets an MCP-capable client for the specified model
+        /// </summary>
+        /// <param name="modelName">Model name</param>
+        /// <returns>MCP-capable LLM client</returns>
         public IMCPLLMClient GetClientForModel(string modelName)
         {
             // Simple provider detection based on model name prefixes
@@ -78,7 +85,8 @@ namespace AIAgentTest.API_Clients.MCP
                 modelName.StartsWith("mixtral") ||
                 modelName.StartsWith("phi") ||
                 modelName.StartsWith("gemma") ||
-                modelName.StartsWith("qwen"))
+                modelName.StartsWith("qwen") ||
+                modelName.StartsWith("acidtib/qwen2.5-coder-cline:7b"))
             {
                 return CreateMCPClient("ollama");
             }

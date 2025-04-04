@@ -109,7 +109,31 @@ namespace AIAgentTest.Views
         private void AddCodeLink(string language, string code)
         {
             var paragraph = new Paragraph();
-            var link = new Hyperlink(new Run($"[View {language} Code]"))
+            
+            // Create a better link text for tool calls
+            string linkText = "[View Code]";
+            
+            // If it's a JSON that contains tool usage, make the link text more descriptive
+            if (language.ToLower() == "json" && code.Contains("[Using ") && code.Contains(" tool...]"))
+            {
+                // Try to extract the tool name to create a better link text
+                var match = System.Text.RegularExpressions.Regex.Match(code, @"\[Using (.*?) tool\.\.\.\]");
+                if (match.Success)
+                {
+                    string toolName = match.Groups[1].Value;
+                    linkText = $"[View {toolName} tool details]"; 
+                }
+                else
+                {
+                    linkText = "[View tool details]";
+                }
+            }
+            else
+            {
+                linkText = $"[View {language} Code]";
+            }
+            
+            var link = new Hyperlink(new Run(linkText))
             {
                 Foreground = Brushes.Blue,
                 TextDecorations = TextDecorations.Underline,
@@ -147,28 +171,34 @@ namespace AIAgentTest.Views
         
         if (sender is Hyperlink link && link.Tag is string code)
         {
-        // Extract language from the link text if possible
-        string linkText = "";
-        if (link.Inlines.FirstInline is Run run)
-        {
-            linkText = run.Text;
-        }
-        
-        string language = "text";
-        
-        if (linkText.Contains("[View ") && linkText.Contains(" Code]"))
-        {
-            language = linkText.Replace("[View ", "").Replace(" Code]", "");
-        }
-        
-        System.Diagnostics.Debug.WriteLine($"Code link clicked: {language}, code length: {code.Length}");
-        
-        // First try to use the direct reference to CodeViewModel
-        if (CodeViewModel != null)
-        {
-        System.Diagnostics.Debug.WriteLine("Using direct CodeViewModel reference");
-        CodeViewModel.SetCode(code, language);
-            return;
+            // Extract language from the link text if possible
+            string linkText = "";
+            if (link.Inlines.FirstInline is Run run)
+            {
+                linkText = run.Text;
+            }
+            
+            string language = "text";
+            
+            // Check for standard code link format
+            if (linkText.Contains("[View ") && linkText.Contains(" Code]"))
+            {
+                language = linkText.Replace("[View ", "").Replace(" Code]", "");
+            }
+            // Check for tool details link format
+            else if (linkText.Contains("[View ") && linkText.Contains(" tool details]"))
+            {
+                language = "json"; // Tool interactions are always in JSON format
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"Code link clicked: {language}, code length: {code.Length}");
+            
+            // First try to use the direct reference to CodeViewModel
+            if (CodeViewModel != null)
+            {
+                System.Diagnostics.Debug.WriteLine("Using direct CodeViewModel reference");
+                CodeViewModel.SetCode(code, language);
+                return;
             }
                 
             // Fallback to find the main view model through the window

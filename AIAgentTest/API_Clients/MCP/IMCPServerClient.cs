@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using AIAgentTest.Services.MCP;
@@ -7,26 +8,26 @@ namespace AIAgentTest.API_Clients.MCP
     /// <summary>
     /// Interface for MCP server clients
     /// </summary>
-    public interface IMCPServerClient
+    public interface IMCPServerClient : IDisposable
     {
         /// <summary>
-        /// Gets the available tools from the server
+        /// Get available tools from the server
         /// </summary>
         /// <returns>List of tool definitions</returns>
-        Task<List<ToolDefinition>> GetAvailableToolsAsync();
+        Task<List<ToolDefinition>> GetToolsAsync();
         
         /// <summary>
-        /// Executes a tool on the server
+        /// Execute a tool on the server
         /// </summary>
-        /// <param name="toolName">Name of the tool to execute</param>
-        /// <param name="parameters">Parameters for the tool</param>
-        /// <returns>Result of the tool execution</returns>
-        Task<object> ExecuteToolAsync(string toolName, Dictionary<string, object> parameters);
+        /// <param name="toolName">Tool name</param>
+        /// <param name="input">Tool input</param>
+        /// <returns>Tool result</returns>
+        Task<object> ExecuteToolAsync(string toolName, object input);
         
         /// <summary>
-        /// Checks if the server is available
+        /// Check if the server is available
         /// </summary>
-        /// <returns>True if the server is available, false otherwise</returns>
+        /// <returns>True if available</returns>
         Task<bool> IsAvailableAsync();
     }
 }

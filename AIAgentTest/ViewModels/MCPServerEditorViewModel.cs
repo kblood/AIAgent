@@ -1,40 +1,97 @@
+using System;
+using System.Collections.Generic;
+using System.Windows.Input;
+using AIAgentTest.Commands;
+
 namespace AIAgentTest.ViewModels
 {
     /// <summary>
-    /// ViewModel for editing an MCP server
+    /// ViewModel for editing MCP servers
     /// </summary>
     public class MCPServerEditorViewModel : ViewModelBase
     {
         private string _name;
-        private string _url;
-        private string _type;
+        private string _command;
+        private string _argsString;
         private bool _isEnabled;
+        private bool _isEditing;
         
         /// <summary>
-        /// Name of the server
+        /// Server name
         /// </summary>
         public string Name
         {
             get => _name;
-            set => SetProperty(ref _name, value);
+            set
+            {
+                if (SetProperty(ref _name, value))
+                {
+                    ValidateProperties();
+                }
+            }
         }
         
         /// <summary>
-        /// URL of the server
+        /// Server command
         /// </summary>
-        public string Url
+        public string Command
         {
-            get => _url;
-            set => SetProperty(ref _url, value);
+            get => _command;
+            set
+            {
+                if (SetProperty(ref _command, value))
+                {
+                    ValidateProperties();
+                }
+            }
         }
         
         /// <summary>
-        /// Type of the server (e.g., "filesystem", "database", "custom")
+        /// Arguments as a space-separated string
+        /// </summary>
+        public string ArgsString
+        {
+            get => _argsString;
+            set
+            {
+                if (SetProperty(ref _argsString, value))
+                {
+                    ValidateProperties();
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Get arguments as an array
+        /// </summary>
+        public string[] Args
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(_argsString))
+                    return new string[0];
+                    
+                return _argsString.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            }
+        }
+        
+        /// <summary>
+        /// Server type (derived from command and args)
         /// </summary>
         public string Type
         {
-            get => _type;
-            set => SetProperty(ref _type, value);
+            get
+            {
+                if (_command == "npx" && Args.Length > 0)
+                {
+                    if (Args[0].Contains("server-filesystem") || 
+                        (Args.Length > 1 && Args[1].Contains("server-filesystem")))
+                    {
+                        return "filesystem";
+                    }
+                }
+                return "custom";
+            }
         }
         
         /// <summary>
@@ -47,31 +104,72 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
-        /// Available server types
+        /// Whether the server is being edited
         /// </summary>
-        public string[] ServerTypes { get; } = { "filesystem", "database", "custom" };
+        public bool IsEditing
+        {
+            get => _isEditing;
+            set => SetProperty(ref _isEditing, value);
+        }
         
         /// <summary>
-        /// Constructor for creating a new server
+        /// Whether the input is valid
         /// </summary>
+        public bool IsValid
+        {
+            get => !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Command) && !string.IsNullOrWhiteSpace(ArgsString);
+        }
+        
+        /// <summary>
+        /// Available server presets
+        /// </summary>
+        public List<(string name, string command, string args)> ServerPresets { get; } = new List<(string, string, string)>
+        {
+            ("FileSystem", "npx", "-y @modelcontextprotocol/server-filesystem C:\\Users\\Documents")
+        };
+        
+        /// <summary>
+        /// Constructor for new server
+        /// </summary>
+        public MCPServerEditorViewModel()
+        {
+            var preset = ServerPresets[0];
+            Command = preset.command;
+            ArgsString = preset.args;
+            IsEnabled = true;
+            IsEditing = false;
+        }
+        
+        /// <summary>
+        /// Constructor for editing existing server
+        /// </summary>
+        /// <param name="server">Server to edit</param>
         public MCPServerEditorViewModel(MCPServerViewModel server)
         {
             if (server != null)
             {
-                // Editing existing server
                 Name = server.Name;
-                Url = server.Url;
-                Type = server.Type;
+                Command = server.Command;
+                ArgsString = server.Args != null ? string.Join(" ", server.Args) : "";
                 IsEnabled = server.IsEnabled;
+                IsEditing = true;
             }
             else
             {
-                // Creating new server
-                Name = "New Server";
-                Url = "http://localhost:3000";
-                Type = "filesystem";
+                var preset = ServerPresets[0];
+                Command = preset.command;
+                ArgsString = preset.args;
                 IsEnabled = true;
+                IsEditing = false;
             }
+        }
+        
+        /// <summary>
+        /// Validate properties
+        /// </summary>
+        private void ValidateProperties()
+        {
+            OnPropertyChanged(nameof(IsValid));
         }
     }
 }

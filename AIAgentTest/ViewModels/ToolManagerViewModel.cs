@@ -1,6 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Windows.Input;
+using AIAgentTest.Commands;
 using AIAgentTest.Services.MCP;
 using System.Collections.Generic;
 
@@ -14,6 +16,11 @@ namespace AIAgentTest.ViewModels
         private readonly IToolRegistry _toolRegistry;
         private ObservableCollection<ToolCategoryViewModel> _categories;
         private string _searchText;
+        
+        /// <summary>
+        /// Command to enable all tools
+        /// </summary>
+        public ICommand EnableAllCommand { get; }
         
         /// <summary>
         /// Categories of tools
@@ -53,6 +60,9 @@ namespace AIAgentTest.ViewModels
             
             // Subscribe to tool registry changes
             toolRegistry.ToolsChanged += (s, e) => LoadTools();
+            
+            // Initialize commands
+            EnableAllCommand = new RelayCommand(EnableAllTools);
         }
         
         /// <summary>
@@ -114,6 +124,24 @@ namespace AIAgentTest.ViewModels
             }
             
             Categories.Add(searchCategory);
+        }
+        
+        /// <summary>
+        /// Enable all tools
+        /// </summary>
+        private void EnableAllTools()
+        {
+            // Get all tools
+            var tools = _toolRegistry.GetAllToolDefinitions();
+            
+            // Enable all tools
+            foreach (var tool in tools)
+            {
+                _toolRegistry.EnableTool(tool.Name);
+            }
+            
+            // Reload tools
+            LoadTools();
         }
     }
 }

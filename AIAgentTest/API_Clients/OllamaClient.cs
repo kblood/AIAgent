@@ -17,16 +17,6 @@ namespace AIAgentTest.API_Clients
         private readonly string _ollamaBaseUrl;
 
         /// <summary>
-        /// Initializes a new instance of the OllamaClient
-        /// </summary>
-        /// <param name="ollamaBaseUrl">The base URL for the Ollama API (default: http://localhost:11434)</param>
-        public OllamaClient(string ollamaBaseUrl = "http://localhost:11434") 
-            : base("Ollama")
-        {
-            _ollamaBaseUrl = ollamaBaseUrl;
-        }
-
-        /// <summary>
         /// Generates a text response from the specified model
         /// </summary>
         public override async Task<string> GenerateTextResponseAsync(string prompt, string model = null)
@@ -37,6 +27,57 @@ namespace AIAgentTest.API_Clients
             var responseText = ExtractPlainTextResponse(responseJson);
 
             return responseText;
+        }
+
+        /// <summary>
+        /// Alias for GenerateTextResponseAsync for backward compatibility
+        /// </summary>
+        public Task<string> GenerateTextAsync(string prompt, string model = null)
+        {
+            return GenerateTextResponseAsync(prompt, model);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the OllamaClient
+        /// </summary>
+        /// <param name="ollamaBaseUrl">The base URL for the Ollama API (default: http://localhost:11434)</param>
+        public OllamaClient(string ollamaBaseUrl = "http://localhost:11434") 
+            : base("Ollama")
+        {
+            _ollamaBaseUrl = ollamaBaseUrl;
+        }
+
+        /// <summary>
+        /// Generates a text response from the specified model with additional parameters
+        /// </summary>
+        public async Task<string> GenerateTextResponseWithParamsAsync(string prompt, string model = null, Dictionary<string, object> additionalParams = null)
+        {
+            model ??= "llama3"; // Default model if none specified
+            
+            // Create base request
+            var request = new Dictionary<string, object>
+            {
+                { "model", model },
+                { "prompt", prompt }
+            };
+            
+            // Add any additional parameters
+            if (additionalParams != null)
+            {
+                foreach (var param in additionalParams)
+                {
+                    request[param.Key] = param.Value;
+                }
+            }
+
+            var jsonContent = JsonSerializer.Serialize(request);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            using var response = await _httpClient.PostAsync($"{_ollamaBaseUrl}/api/generate", content);
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var textResponse = ExtractPlainTextResponse(responseContent);
+            return textResponse;
         }
 
         /// <summary>

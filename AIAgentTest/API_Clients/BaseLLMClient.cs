@@ -72,12 +72,23 @@ namespace AIAgentTest.API_Clients
         }
         
         /// <summary>
-        /// Extracts plain text from a JSON response
+        /// Extracts response from a JSON, preserving tool call structure if present
         /// </summary>
         protected string ExtractPlainTextResponse(string jsonLines)
         {
             var responseBuilder = new StringBuilder();
+            string fullResponse = string.Empty;
+            bool containsToolCall = false;
 
+            // First check if the response contains a tool call
+            if (jsonLines.Contains("\"type\":\"tool_use\"")
+                || jsonLines.Contains("\"type\": \"tool_use\""))
+            {
+                containsToolCall = true;
+                fullResponse = jsonLines;
+            }
+
+            // Process each line
             foreach (var line in jsonLines.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 try
@@ -85,6 +96,18 @@ namespace AIAgentTest.API_Clients
                     using (JsonDocument doc = JsonDocument.Parse(line))
                     {
                         JsonElement root = doc.RootElement;
+                        
+                        // Check for tool call first
+                        if (root.TryGetProperty("type", out JsonElement typeElement) &&
+                            typeElement.GetString() == "tool_use" &&
+                            root.TryGetProperty("tool", out _) &&
+                            root.TryGetProperty("tool_input", out _))
+                        {
+                            // Return the full tool call JSON as is
+                            return line;
+                        }
+                        
+                        // Otherwise extract regular response text
                         if (root.TryGetProperty("response", out JsonElement responseElement))
                         {
                             responseBuilder.Append(responseElement.GetString());
@@ -95,6 +118,13 @@ namespace AIAgentTest.API_Clients
                 {
                     Console.WriteLine($"Failed to parse JSON: {ex.Message}");
                 }
+            }
+
+            // If we found a tool call but couldn't parse it line by line,
+            // return the full response for the OllamaMCPAdapter to process
+            if (containsToolCall)
+            {
+                return fullResponse;
             }
 
             return responseBuilder.ToString();

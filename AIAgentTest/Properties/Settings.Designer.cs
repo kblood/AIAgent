@@ -46,5 +46,29 @@ namespace AIAgentTest.Properties {
                 this["MCPServers"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string EnabledTools {
+            get {
+                return ((string)(this["EnabledTools"]));
+            }
+            set {
+                this["EnabledTools"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string EnabledMCPServers {
+            get {
+                return ((string)(this["EnabledMCPServers"]));
+            }
+            set {
+                this["EnabledMCPServers"] = value;
+            }
+        }
     }
 }

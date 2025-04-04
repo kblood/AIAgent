@@ -1,22 +1,21 @@
-using System.Collections.Generic;
-using System.Text.Json;
+using System;
 
 namespace AIAgentTest.ViewModels
 {
     /// <summary>
-    /// ViewModel for representing tool usage in the UI
+    /// ViewModel for tool usage in chat
     /// </summary>
     public class ToolUseViewModel : ViewModelBase
     {
         private string _toolName;
-        private Dictionary<string, object> _input;
+        private object _input;
         private object _result;
-        private bool _isExecuting;
-        private bool _succeeded;
         private string _error;
+        private bool _succeeded;
+        private bool _isExecuting;
         
         /// <summary>
-        /// Name of the tool
+        /// Name of the tool being used
         /// </summary>
         public string ToolName
         {
@@ -27,37 +26,19 @@ namespace AIAgentTest.ViewModels
         /// <summary>
         /// Input parameters for the tool
         /// </summary>
-        public Dictionary<string, object> Input
+        public object Input
         {
             get => _input;
             set => SetProperty(ref _input, value);
         }
         
         /// <summary>
-        /// Result from executing the tool
+        /// Result of the tool execution
         /// </summary>
         public object Result
         {
             get => _result;
             set => SetProperty(ref _result, value);
-        }
-        
-        /// <summary>
-        /// Whether the tool is currently executing
-        /// </summary>
-        public bool IsExecuting
-        {
-            get => _isExecuting;
-            set => SetProperty(ref _isExecuting, value);
-        }
-        
-        /// <summary>
-        /// Whether the tool execution succeeded
-        /// </summary>
-        public bool Succeeded
-        {
-            get => _succeeded;
-            set => SetProperty(ref _succeeded, value);
         }
         
         /// <summary>
@@ -70,20 +51,21 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
-        /// Gets the input parameters formatted as JSON
+        /// Whether the tool execution succeeded
         /// </summary>
-        public string GetFormattedInput()
+        public bool Succeeded
         {
-            return JsonSerializer.Serialize(Input, new JsonSerializerOptions { WriteIndented = true });
+            get => _succeeded;
+            set => SetProperty(ref _succeeded, value);
         }
         
         /// <summary>
-        /// Gets the result formatted as JSON
+        /// Whether the tool is currently executing
         /// </summary>
-        public string GetFormattedResult()
+        public bool IsExecuting
         {
-            if (Result == null) return string.Empty;
-            return JsonSerializer.Serialize(Result, new JsonSerializerOptions { WriteIndented = true });
+            get => _isExecuting;
+            set => SetProperty(ref _isExecuting, value);
         }
     }
 }

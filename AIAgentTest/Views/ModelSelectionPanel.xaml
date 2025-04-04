@@ -5,19 +5,38 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:local="clr-namespace:AIAgentTest.Views"
              mc:Ignorable="d">
-    <StackPanel Orientation="Horizontal">
-        <TextBlock Text="Model:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <ComboBox Width="200" 
-                  ItemsSource="{Binding AvailableModels}"
-                  SelectedItem="{Binding SelectedModel}"
-                  Style="{StaticResource StandardComboBox}"
-                  Margin="0,0,10,0"/>
-        <Button Content="Refresh" 
-                Command="{Binding RefreshModelsCommand}"
-                Style="{StaticResource StandardButton}"
-                Margin="0,0,10,0"/>
-        <Button Content="Settings"
-                Command="{Binding ShowModelSettingsCommand}"
-                Style="{StaticResource StandardButton}"/>
+    
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </UserControl.Resources>
+    <StackPanel>
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="Model:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <ComboBox Width="200" 
+                      ItemsSource="{Binding AvailableModels}"
+                      SelectedItem="{Binding SelectedModel}"
+                      Style="{StaticResource StandardComboBox}"
+                      Margin="0,0,10,0"/>
+            <Button Content="Refresh" 
+                    Command="{Binding RefreshModelsCommand}"
+                    Style="{StaticResource StandardButton}"
+                    Margin="0,0,10,0"/>
+            <Button Content="Settings"
+                    Command="{Binding ShowModelSettingsCommand}"
+                    Style="{StaticResource StandardButton}"
+                    Margin="0,0,10,0"/>
+            
+            <!-- MCP Status Indicator -->
+            <Border Background="#22AA22" 
+                    CornerRadius="4" 
+                    Padding="8,2" 
+                    Margin="10,0,0,0"
+                    Visibility="{Binding CurrentModelSupportsMCP, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <TextBlock Text="MCP Supported" 
+                           Foreground="White" 
+                           FontWeight="Bold" 
+                           FontSize="11"/>
+            </Border>
+        </StackPanel>
     </StackPanel>
 </UserControl>

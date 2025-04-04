@@ -1,430 +1,187 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Text.Json;
 using System.IO;
 using System.Net.Http;
-using System.Text.Json;
-using System.Threading.Tasks;
+using System.Linq;
 
 namespace AIAgentTest.Services.MCP
 {
     /// <summary>
-    /// Common tools that can be used with MCP
+    /// Common tools for MCP
     /// </summary>
     public class CommonTools
     {
-        private readonly HttpClient _httpClient;
+        private static readonly HttpClient _httpClient = new HttpClient();
         
         /// <summary>
-        /// Creates a new CommonTools instance
+        /// Register common tools with a tool registry
         /// </summary>
-        public CommonTools()
+        /// <param name="registry">Tool registry</param>
+        public void RegisterCommonTools(IToolRegistry registry)
         {
-            _httpClient = new HttpClient();
-        }
-        
-        /// <summary>
-        /// Registers common tools with the tool registry
-        /// </summary>
-        /// <param name="toolRegistry">Tool registry to register with</param>
-        public void RegisterCommonTools(IToolRegistry toolRegistry)
-        {
-            // Web search tool
-            RegisterWebSearchTool(toolRegistry);
+            if (registry == null)
+                throw new ArgumentNullException(nameof(registry));
             
-            // Get current time tool
-            RegisterCurrentTimeTool(toolRegistry);
-            
-            // Read and write file tools
-            RegisterFileTools(toolRegistry);
-            
-            // Simple calculator tool
-            RegisterCalculatorTool(toolRegistry);
-        }
-        
-        /// <summary>
-        /// Registers a web search tool
-        /// </summary>
-        private void RegisterWebSearchTool(IToolRegistry toolRegistry)
-        {
-            var inputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
+            // Register date/time tool
+            registry.RegisterTool(
+                new ToolDefinition
                 {
-                    ["query"] = new Dictionary<string, object>
+                    Name = "get_date_time",
+                    Description = "Get the current date and time",
+                    Schema = JsonSerializer.Serialize(new
                     {
-                        ["type"] = "string",
-                        ["description"] = "The search query"
-                    },
-                    ["num_results"] = new Dictionary<string, object>
+                        type = "object",
+                        properties = new { },
+                    }),
+                    Tags = new[] { "Utility" },
+                    Metadata = new Dictionary<string, object>
                     {
-                        ["type"] = "integer",
-                        ["description"] = "Number of results to return",
-                        ["default"] = 5
+                        { "friendly_name", "Date and Time" },
+                        { "priority", 1 }
                     }
                 },
-                ["required"] = new List<string> { "query" }
-            };
+                GetDateTimeHandler);
             
-            var outputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
+            // Register file read tool
+            registry.RegisterTool(
+                new ToolDefinition
                 {
-                    ["results"] = new Dictionary<string, object>
+                    Name = "read_file",
+                    Description = "Read the contents of a file",
+                    Schema = JsonSerializer.Serialize(new
                     {
-                        ["type"] = "array",
-                        ["items"] = new Dictionary<string, object>
+                        type = "object",
+                        properties = new
                         {
-                            ["type"] = "object",
-                            ["properties"] = new Dictionary<string, object>
+                            path = new
                             {
-                                ["title"] = new Dictionary<string, object> { ["type"] = "string" },
-                                ["url"] = new Dictionary<string, object> { ["type"] = "string" },
-                                ["snippet"] = new Dictionary<string, object> { ["type"] = "string" }
+                                type = "string",
+                                description = "The path to the file"
                             }
-                        }
-                    }
-                }
-            };
-            
-            var toolDefinition = new ToolDefinition
-            {
-                Name = "web_search",
-                Description = "Search the web for information",
-                Input = inputSchema,
-                Output = outputSchema,
-                ToolType = "function",
-                Tags = new List<string> { "Web", "Search" }
-            };
-            
-            toolRegistry.RegisterTool(toolDefinition, WebSearchHandler);
-        }
-        
-        /// <summary>
-        /// Handles web search requests
-        /// </summary>
-        private async Task<object> WebSearchHandler(Dictionary<string, object> parameters)
-        {
-            string query = parameters["query"].ToString();
-            int numResults = 5;
-            
-            if (parameters.TryGetValue("num_results", out var numResultsObj))
-            {
-                numResults = Convert.ToInt32(numResultsObj);
-            }
-            
-            // In a real implementation, this would call a search API
-            // For now, we'll return mock results
-            await Task.Delay(500); // Simulate network delay
-            
-            var results = new List<Dictionary<string, string>>();
-            
-            for (int i = 0; i < numResults; i++)
-            {
-                results.Add(new Dictionary<string, string>
-                {
-                    ["title"] = $"Result {i + 1} for {query}",
-                    ["url"] = $"https://example.com/result/{i + 1}",
-                    ["snippet"] = $"This is a snippet of text from result {i + 1} related to {query}."
-                });
-            }
-            
-            return new Dictionary<string, object>
-            {
-                ["results"] = results
-            };
-        }
-        
-        /// <summary>
-        /// Registers a current time tool
-        /// </summary>
-        private void RegisterCurrentTimeTool(IToolRegistry toolRegistry)
-        {
-            var inputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["timezone"] = new Dictionary<string, object>
-                    {
-                        ["type"] = "string",
-                        ["description"] = "Optional timezone (default: local)",
-                        ["default"] = "local"
-                    }
-                }
-            };
-            
-            var outputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["current_time"] = new Dictionary<string, object> { ["type"] = "string" },
-                    ["timezone"] = new Dictionary<string, object> { ["type"] = "string" },
-                    ["unix_timestamp"] = new Dictionary<string, object> { ["type"] = "integer" }
-                }
-            };
-            
-            var toolDefinition = new ToolDefinition
-            {
-                Name = "get_current_time",
-                Description = "Get the current date and time",
-                Input = inputSchema,
-                Output = outputSchema,
-                ToolType = "function",
-                Tags = new List<string> { "Utility", "Time" }
-            };
-            
-            toolRegistry.RegisterTool(toolDefinition, CurrentTimeHandler);
-        }
-        
-        /// <summary>
-        /// Handles current time requests
-        /// </summary>
-        private async Task<object> CurrentTimeHandler(Dictionary<string, object> parameters)
-        {
-            string timezone = "local";
-            
-            if (parameters.TryGetValue("timezone", out var timezoneObj))
-            {
-                timezone = timezoneObj.ToString();
-            }
-            
-            DateTime now = DateTime.Now;
-            DateTimeOffset nowOffset = DateTimeOffset.Now;
-            
-            if (timezone != "local")
-            {
-                try
-                {
-                    var timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(timezone);
-                    now = TimeZoneInfo.ConvertTime(now, timeZoneInfo);
-                    nowOffset = TimeZoneInfo.ConvertTime(nowOffset, timeZoneInfo);
-                }
-                catch
-                {
-                    // If timezone not found, fall back to local
-                }
-            }
-            
-            return new Dictionary<string, object>
-            {
-                ["current_time"] = now.ToString("yyyy-MM-dd HH:mm:ss"),
-                ["timezone"] = timezone,
-                ["unix_timestamp"] = (int)nowOffset.ToUnixTimeSeconds()
-            };
-        }
-        
-        /// <summary>
-        /// Registers file tools
-        /// </summary>
-        private void RegisterFileTools(IToolRegistry toolRegistry)
-        {
-            // Read file tool
-            var readInputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["file_path"] = new Dictionary<string, object>
-                    {
-                        ["type"] = "string",
-                        ["description"] = "Path to the file to read"
-                    }
+                        },
+                        required = new[] { "path" }
+                    }),
+                    Tags = new[] { "File System" }
                 },
-                ["required"] = new List<string> { "file_path" }
-            };
+                ReadFileHandler);
             
-            var readOutputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
+            // Register directory listing tool
+            registry.RegisterTool(
+                new ToolDefinition
                 {
-                    ["content"] = new Dictionary<string, object> { ["type"] = "string" },
-                    ["file_path"] = new Dictionary<string, object> { ["type"] = "string" }
-                }
-            };
-            
-            var readToolDefinition = new ToolDefinition
-            {
-                Name = "read_file",
-                Description = "Read the contents of a file",
-                Input = readInputSchema,
-                Output = readOutputSchema,
-                ToolType = "function",
-                Tags = new List<string> { "File", "IO" }
-            };
-            
-            toolRegistry.RegisterTool(readToolDefinition, ReadFileHandler);
-            
-            // Write file tool
-            var writeInputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["file_path"] = new Dictionary<string, object>
+                    Name = "list_directory",
+                    Description = "List files and directories in a directory",
+                    Schema = JsonSerializer.Serialize(new
                     {
-                        ["type"] = "string",
-                        ["description"] = "Path to the file to write"
-                    },
-                    ["content"] = new Dictionary<string, object>
-                    {
-                        ["type"] = "string",
-                        ["description"] = "Content to write to the file"
-                    }
+                        type = "object",
+                        properties = new
+                        {
+                            path = new
+                            {
+                                type = "string",
+                                description = "The path to the directory"
+                            }
+                        },
+                        required = new[] { "path" }
+                    }),
+                    Tags = new[] { "File System" }
                 },
-                ["required"] = new List<string> { "file_path", "content" }
-            };
-            
-            var writeOutputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["success"] = new Dictionary<string, object> { ["type"] = "boolean" },
-                    ["file_path"] = new Dictionary<string, object> { ["type"] = "string" }
-                }
-            };
-            
-            var writeToolDefinition = new ToolDefinition
-            {
-                Name = "write_file",
-                Description = "Write content to a file",
-                Input = writeInputSchema,
-                Output = writeOutputSchema,
-                ToolType = "function",
-                Tags = new List<string> { "File", "IO" }
-            };
-            
-            toolRegistry.RegisterTool(writeToolDefinition, WriteFileHandler);
+                ListDirectoryHandler);
         }
         
         /// <summary>
-        /// Handles read file requests
+        /// Handle date/time requests
         /// </summary>
-        private async Task<object> ReadFileHandler(Dictionary<string, object> parameters)
+        /// <param name="input">Tool input</param>
+        /// <returns>Tool result</returns>
+        private async Task<object> GetDateTimeHandler(object input)
         {
-            string filePath = parameters["file_path"].ToString();
+            Console.WriteLine($"GetDateTimeHandler called with input: {JsonSerializer.Serialize(input)}");
+            
+            var now = DateTime.Now;
+            var utcNow = DateTime.UtcNow;
+            
+            var result = new
+            {
+                localDateTime = now.ToString("yyyy-MM-dd HH:mm:ss"),
+                utcDateTime = utcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                timeZone = TimeZoneInfo.Local.DisplayName,
+                unixTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds()
+            };
+            
+            Console.WriteLine($"GetDateTimeHandler returning: {JsonSerializer.Serialize(result)}");
+            return result;
+        }
+        
+        /// <summary>
+        /// Handle file read requests
+        /// </summary>
+        /// <param name="input">Tool input</param>
+        /// <returns>Tool result</returns>
+        private async Task<object> ReadFileHandler(object input)
+        {
+            var options = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(input));
+            
+            if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
+            {
+                return new { error = "Path parameter is required" };
+            }
+            
+            string path = pathObj.ToString();
             
             try
             {
-                string content = await File.ReadAllTextAsync(filePath);
-                
-                return new Dictionary<string, object>
+                if (!File.Exists(path))
                 {
-                    ["content"] = content,
-                    ["file_path"] = filePath
+                    return new { error = "File not found" };
+                }
+                
+                var content = await File.ReadAllTextAsync(path);
+                return new { content };
+            }
+            catch (Exception ex)
+            {
+                return new { error = ex.Message };
+            }
+        }
+        
+        /// <summary>
+        /// Handle directory listing requests
+        /// </summary>
+        /// <param name="input">Tool input</param>
+        /// <returns>Tool result</returns>
+        private async Task<object> ListDirectoryHandler(object input)
+        {
+            var options = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(input));
+            
+            if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
+            {
+                return new { error = "Path parameter is required" };
+            }
+            
+            string path = pathObj.ToString();
+            
+            try
+            {
+                if (!Directory.Exists(path))
+                {
+                    return new { error = "Directory not found" };
+                }
+                
+                var directories = Directory.GetDirectories(path).Select(Path.GetFileName).ToArray();
+                var files = Directory.GetFiles(path).Select(Path.GetFileName).ToArray();
+                
+                return new
+                {
+                    directories,
+                    files
                 };
             }
             catch (Exception ex)
             {
-                return new Dictionary<string, object>
-                {
-                    ["error"] = ex.Message,
-                    ["file_path"] = filePath
-                };
-            }
-        }
-        
-        /// <summary>
-        /// Handles write file requests
-        /// </summary>
-        private async Task<object> WriteFileHandler(Dictionary<string, object> parameters)
-        {
-            string filePath = parameters["file_path"].ToString();
-            string content = parameters["content"].ToString();
-            
-            try
-            {
-                await File.WriteAllTextAsync(filePath, content);
-                
-                return new Dictionary<string, object>
-                {
-                    ["success"] = true,
-                    ["file_path"] = filePath
-                };
-            }
-            catch (Exception ex)
-            {
-                return new Dictionary<string, object>
-                {
-                    ["success"] = false,
-                    ["error"] = ex.Message,
-                    ["file_path"] = filePath
-                };
-            }
-        }
-        
-        /// <summary>
-        /// Registers a calculator tool
-        /// </summary>
-        private void RegisterCalculatorTool(IToolRegistry toolRegistry)
-        {
-            var inputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["expression"] = new Dictionary<string, object>
-                    {
-                        ["type"] = "string",
-                        ["description"] = "Math expression to evaluate (e.g., '2 * (3 + 4)')"
-                    }
-                },
-                ["required"] = new List<string> { "expression" }
-            };
-            
-            var outputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = new Dictionary<string, object>
-                {
-                    ["result"] = new Dictionary<string, object> { ["type"] = "number" },
-                    ["expression"] = new Dictionary<string, object> { ["type"] = "string" }
-                }
-            };
-            
-            var toolDefinition = new ToolDefinition
-            {
-                Name = "calculate",
-                Description = "Calculate the result of a mathematical expression",
-                Input = inputSchema,
-                Output = outputSchema,
-                ToolType = "function",
-                Tags = new List<string> { "Math", "Utility" }
-            };
-            
-            toolRegistry.RegisterTool(toolDefinition, CalculateHandler);
-        }
-        
-        /// <summary>
-        /// Handles calculator requests
-        /// </summary>
-        private async Task<object> CalculateHandler(Dictionary<string, object> parameters)
-        {
-            string expression = parameters["expression"].ToString();
-            
-            try
-            {
-                // Create a new DataTable instance for calculation
-                var dataTable = new System.Data.DataTable();
-                var result = dataTable.Compute(expression, "");
-                
-                return new Dictionary<string, object>
-                {
-                    ["result"] = Convert.ToDouble(result),
-                    ["expression"] = expression
-                };
-            }
-            catch (Exception ex)
-            {
-                return new Dictionary<string, object>
-                {
-                    ["error"] = ex.Message,
-                    ["expression"] = expression
-                };
+                return new { error = ex.Message };
             }
         }
     }

@@ -1,7 +1,9 @@
 using System.Windows;
 using AIAgentTest.API_Clients;
+using AIAgentTest.API_Clients.MCP;
 using AIAgentTest.Services;
 using AIAgentTest.Services.Interfaces;
+using AIAgentTest.Services.MCP;
 using AIAgentTest.ViewModels;
 
 namespace AIAgentTest
@@ -31,16 +33,24 @@ namespace AIAgentTest
                 var messageParsingService = new MessageParsingService();
                 ServiceProvider.RegisterService<IMessageParsingService>(messageParsingService);
                 
+                // Register MCP services
+                AIAgentTest.Services.MCP.MCPServiceRegistration.RegisterMCPServices();
+                
                 var themeService = new ThemeService();
                 ServiceProvider.RegisterService<ThemeService>(themeService);
                 
                 var modelSelectionViewModel = new ModelSelectionViewModel(llmClientService);
                 ServiceProvider.RegisterService<ModelSelectionViewModel>(modelSelectionViewModel);
                 
+                // Create MCP-enabled ViewModels
+                var mcpLLMClientService = ServiceProvider.GetService<IMCPLLMClientService>();
+                var mcpContextManager = ServiceProvider.GetService<IMCPContextManager>();
+                
+                // Use MCP-aware chat session view model with MCP services
                 var chatSessionViewModel = new ChatSessionViewModel(
-                    llmClientService,
+                    mcpLLMClientService, // Use MCP-enabled service
                     chatSessionService,
-                    contextManager,
+                    mcpContextManager, // Use MCP context manager
                     messageParsingService);
                 ServiceProvider.RegisterService<ChatSessionViewModel>(chatSessionViewModel);
                 
@@ -63,12 +73,24 @@ namespace AIAgentTest
                 var debugViewModel = new DebugViewModel(contextManager);
                 ServiceProvider.RegisterService<DebugViewModel>(debugViewModel);
                 
+                // Create MCP tool manager ViewModels
+                var toolManagerViewModel = new ToolManagerViewModel(
+                    ServiceProvider.GetService<IToolRegistry>());
+                ServiceProvider.RegisterService<ToolManagerViewModel>(toolManagerViewModel);
+
+                var mcpServerManagerViewModel = new MCPServerManagerViewModel(
+                    ServiceProvider.GetService<MCPClientFactory>());
+                ServiceProvider.RegisterService<MCPServerManagerViewModel>(mcpServerManagerViewModel);
+                
+                // Create main view model with MCP components
                 var mainViewModel = new MainViewModel(
                     themeService,
                     modelSelectionViewModel,
                     codeViewModel,
                     debugViewModel,
-                    chatSessionViewModel);
+                    chatSessionViewModel,
+                    toolManagerViewModel,
+                    mcpServerManagerViewModel);
                 ServiceProvider.RegisterService<MainViewModel>(mainViewModel);
             }
             catch (System.Exception ex)

@@ -6,255 +6,218 @@ using System.Threading.Tasks;
 namespace AIAgentTest.Services.MCP
 {
     /// <summary>
-    /// Implementation of IToolRegistry for managing tools and functions
+    /// Implementation of IToolRegistry
     /// </summary>
     public class ToolRegistry : IToolRegistry
     {
-        private readonly Dictionary<string, (ToolDefinition Definition, Func<Dictionary<string, object>, Task<object>> Handler)> _tools = new();
-        private readonly HashSet<string> _disabledTools = new HashSet<string>();
+        private readonly Dictionary<string, ToolDefinition> _tools = new Dictionary<string, ToolDefinition>();
+        private readonly Dictionary<string, Func<object, Task<object>>> _handlers = new Dictionary<string, Func<object, Task<object>>>();
+        private readonly HashSet<string> _enabledTools = new HashSet<string>();
         
         /// <summary>
-        /// Registers a tool with the registry
-        /// </summary>
-        public void RegisterTool(
-            ToolDefinition toolDefinition, 
-            Func<Dictionary<string, object>, Task<object>> handler)
-        {
-            _tools[toolDefinition.Name] = (toolDefinition, handler);
-            ToolsChanged?.Invoke(this, EventArgs.Empty);
-        }
-        
-        /// <summary>
-        /// Simplified registration method that builds the ToolDefinition
-        /// </summary>
-        public void RegisterTool(
-            string name,
-            string description,
-            Dictionary<string, object> inputSchema,
-            Dictionary<string, object> outputSchema,
-            Func<Dictionary<string, object>, Task<object>> handler,
-            string toolType = "function",
-            List<string> tags = null)
-        {
-            var toolDefinition = new ToolDefinition
-            {
-                Name = name,
-                Description = description,
-                Input = inputSchema,
-                Output = outputSchema,
-                ToolType = toolType,
-                Tags = tags ?? new List<string>()
-            };
-            
-            RegisterTool(toolDefinition, handler);
-        }
-        
-        /// <summary>
-        /// Gets all available tools (excluding disabled ones)
-        /// </summary>
-        public List<ToolDefinition> GetTools()
-        {
-            return _tools.Values
-                .Where(t => !_disabledTools.Contains(t.Definition.Name))
-                .Select(t => t.Definition)
-                .ToList();
-        }
-        
-        /// <summary>
-        /// Gets all tool definitions including disabled ones
-        /// </summary>
-        public List<ToolDefinition> GetAllToolDefinitions()
-        {
-            return _tools.Values.Select(t => t.Definition).ToList();
-        }
-        
-        /// <summary>
-        /// Gets tools of a specific type
-        /// </summary>
-        public List<ToolDefinition> GetToolsByType(string toolType)
-        {
-            return _tools.Values
-                .Where(t => t.Definition.ToolType == toolType && !_disabledTools.Contains(t.Definition.Name))
-                .Select(t => t.Definition)
-                .ToList();
-        }
-        
-        /// <summary>
-        /// Gets tools with a specific tag
-        /// </summary>
-        public List<ToolDefinition> GetToolsByTag(string tag)
-        {
-            return _tools.Values
-                .Where(t => t.Definition.Tags.Contains(tag) && !_disabledTools.Contains(t.Definition.Name))
-                .Select(t => t.Definition)
-                .ToList();
-        }
-        
-        /// <summary>
-        /// Gets the definition of a specific tool
-        /// </summary>
-        public ToolDefinition GetToolDefinition(string name)
-        {
-            return _tools.TryGetValue(name, out var tool) ? tool.Definition : null;
-        }
-        
-        /// <summary>
-        /// Gets the handler for a specific tool
-        /// </summary>
-        public Func<Dictionary<string, object>, Task<object>> GetToolHandler(string name)
-        {
-            return _tools.TryGetValue(name, out var tool) && !_disabledTools.Contains(name) 
-                ? tool.Handler 
-                : null;
-        }
-        
-        /// <summary>
-        /// Checks if a tool exists in the registry
-        /// </summary>
-        public bool ToolExists(string name)
-        {
-            return _tools.ContainsKey(name);
-        }
-        
-        /// <summary>
-        /// Enables a tool for use
-        /// </summary>
-        public void EnableTool(string toolName)
-        {
-            if (_disabledTools.Contains(toolName))
-            {
-                _disabledTools.Remove(toolName);
-                ToolsChanged?.Invoke(this, EventArgs.Empty);
-            }
-        }
-        
-        /// <summary>
-        /// Disables a tool
-        /// </summary>
-        public void DisableTool(string toolName)
-        {
-            if (_tools.ContainsKey(toolName) && !_disabledTools.Contains(toolName))
-            {
-                _disabledTools.Add(toolName);
-                ToolsChanged?.Invoke(this, EventArgs.Empty);
-            }
-        }
-        
-        /// <summary>
-        /// Checks if a tool is enabled
-        /// </summary>
-        public bool IsToolEnabled(string toolName)
-        {
-            return _tools.ContainsKey(toolName) && !_disabledTools.Contains(toolName);
-        }
-        
-        /// <summary>
-        /// Event that is triggered when tool enable/disable state changes
+        /// Event that fires when tools change
         /// </summary>
         public event EventHandler ToolsChanged;
         
         /// <summary>
-        /// Gets all function definitions (for backwards compatibility)
+        /// Constructor
         /// </summary>
-        public List<FunctionDefinition> GetFunctionDefinitions()
+        public ToolRegistry()
         {
-            // Convert tools to function definitions for backward compatibility
-            return GetToolsByType("function")
-                .Select(t => new FunctionDefinition 
-                { 
-                    Name = t.Name, 
-                    Description = t.Description,
-                    Parameters = ConvertToolParametersToFunctionParameters(t.Input)
-                })
+            // Load enabled tools from settings
+            LoadEnabledTools();
+        }
+        
+        /// <summary>
+        /// Register a tool
+        /// </summary>
+        /// <param name="definition">Tool definition</param>
+        /// <param name="handler">Tool handler function</param>
+        public void RegisterTool(ToolDefinition definition, Func<object, Task<object>> handler)
+        {
+            if (definition == null)
+                throw new ArgumentNullException(nameof(definition));
+            
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+            
+            if (string.IsNullOrWhiteSpace(definition.Name))
+                throw new ArgumentException("Tool name cannot be empty");
+            
+            // Add the tool
+            _tools[definition.Name] = definition;
+            _handlers[definition.Name] = handler;
+            
+            // Enable by default if not explicitly disabled
+            if (!_enabledTools.Contains(definition.Name) && !IsToolExplicitlyDisabled(definition.Name))
+            {
+                _enabledTools.Add(definition.Name);
+            }
+            
+            // Notify about the change
+            OnToolsChanged();
+            
+            // Save enabled tools to settings
+            SaveEnabledTools();
+        }
+        
+        /// <summary>
+        /// Get all tools
+        /// </summary>
+        /// <returns>List of tools</returns>
+        public List<ToolDefinition> GetTools()
+        {
+            return _tools
+                .Where(t => _enabledTools.Contains(t.Key))
+                .Select(t => t.Value)
                 .ToList();
         }
         
         /// <summary>
-        /// Converts tool parameters to function parameters
+        /// Get a specific tool handler
         /// </summary>
-        private Dictionary<string, ParameterDefinition> ConvertToolParametersToFunctionParameters(Dictionary<string, object> input)
+        /// <param name="name">Tool name</param>
+        /// <returns>Tool handler function</returns>
+        public Func<object, Task<object>> GetToolHandler(string name)
         {
-            var result = new Dictionary<string, ParameterDefinition>();
+            if (!_handlers.TryGetValue(name, out var handler))
+                return null;
             
-            if (input.TryGetValue("properties", out var propertiesObj) && propertiesObj is Dictionary<string, object> properties)
-            {
-                var required = new List<string>();
-                if (input.TryGetValue("required", out var requiredObj) && requiredObj is List<string> requiredList)
-                {
-                    required = requiredList;
-                }
-                
-                foreach (var prop in properties)
-                {
-                    if (prop.Value is Dictionary<string, object> propDetails)
-                    {
-                        var paramDef = new ParameterDefinition
-                        {
-                            Type = propDetails.TryGetValue("type", out var typeObj) ? typeObj.ToString() : "string",
-                            Description = propDetails.TryGetValue("description", out var descObj) ? descObj.ToString() : "",
-                            Required = required.Contains(prop.Key)
-                        };
-                        
-                        result[prop.Key] = paramDef;
-                    }
-                }
-            }
+            if (!_enabledTools.Contains(name))
+                return null;
             
-            return result;
+            return handler;
         }
         
         /// <summary>
-        /// Registers a function as a tool
+        /// Get a specific tool definition
         /// </summary>
-        public void RegisterFunction(
-            string name, 
-            string description, 
-            Dictionary<string, ParameterDefinition> parameters, 
-            Func<Dictionary<string, object>, Task<object>> handler,
-            string category = "General")
+        /// <param name="name">Tool name</param>
+        /// <returns>Tool definition</returns>
+        public ToolDefinition GetToolDefinition(string name)
         {
-            // Convert ParameterDefinition to MCP input schema
-            var properties = new Dictionary<string, object>();
-            var required = new List<string>();
+            if (_tools.TryGetValue(name, out var definition))
+                return definition;
             
-            foreach (var param in parameters)
+            return null;
+        }
+        
+        /// <summary>
+        /// Enable a tool
+        /// </summary>
+        /// <param name="name">Tool name</param>
+        public void EnableTool(string name)
+        {
+            if (!_tools.ContainsKey(name))
+                return;
+            
+            _enabledTools.Add(name);
+            
+            // Notify about the change
+            OnToolsChanged();
+            
+            // Save enabled tools to settings
+            SaveEnabledTools();
+        }
+        
+        /// <summary>
+        /// Disable a tool
+        /// </summary>
+        /// <param name="name">Tool name</param>
+        public void DisableTool(string name)
+        {
+            _enabledTools.Remove(name);
+            
+            // Notify about the change
+            OnToolsChanged();
+            
+            // Save enabled tools to settings
+            SaveEnabledTools();
+        }
+        
+        /// <summary>
+        /// Check if a tool is enabled
+        /// </summary>
+        /// <param name="name">Tool name</param>
+        /// <returns>True if enabled</returns>
+        public bool IsToolEnabled(string name)
+        {
+            return _enabledTools.Contains(name);
+        }
+        
+        /// <summary>
+        /// Get all tool definitions including disabled tools
+        /// </summary>
+        /// <returns>List of tool definitions</returns>
+        public List<ToolDefinition> GetAllToolDefinitions()
+        {
+            return _tools.Values.ToList();
+        }
+        
+        /// <summary>
+        /// Check if a tool is explicitly disabled in settings
+        /// </summary>
+        /// <param name="name">Tool name</param>
+        /// <returns>True if disabled</returns>
+        private bool IsToolExplicitlyDisabled(string name)
+        {
+            var disabledTools = Properties.Settings.Default.EnabledTools?
+                .Split(';', StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => t.StartsWith("!"))
+                .Select(t => t.Substring(1))
+                .ToList() ?? new List<string>();
+            
+            return disabledTools.Contains(name);
+        }
+        
+        /// <summary>
+        /// Load enabled tools from settings
+        /// </summary>
+        private void LoadEnabledTools()
+        {
+            var enabledToolsString = Properties.Settings.Default.EnabledTools;
+            
+            if (string.IsNullOrEmpty(enabledToolsString))
+                return;
+            
+            var toolsList = enabledToolsString.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            
+            foreach (var tool in toolsList)
             {
-                properties[param.Key] = new Dictionary<string, object>
-                {
-                    ["type"] = param.Value.Type.ToLower(),
-                    ["description"] = param.Value.Description
-                };
+                if (tool.StartsWith("!"))
+                    continue; // Explicitly disabled tool, handled in IsToolExplicitlyDisabled
                 
-                if (param.Value.Required)
-                {
-                    required.Add(param.Key);
-                }
+                _enabledTools.Add(tool);
+            }
+        }
+        
+        /// <summary>
+        /// Save enabled tools to settings
+        /// </summary>
+        private void SaveEnabledTools()
+        {
+            var allTools = _tools.Keys.ToList();
+            var enabledTools = new List<string>();
+            var disabledTools = new List<string>();
+            
+            foreach (var tool in allTools)
+            {
+                if (_enabledTools.Contains(tool))
+                    enabledTools.Add(tool);
+                else
+                    disabledTools.Add("!" + tool);
             }
             
-            var inputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = properties,
-                ["required"] = required
-            };
-            
-            // Create a generic output schema
-            var outputSchema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["description"] = "Function result"
-            };
-            
-            // Register as a tool
-            RegisterTool(
-                name: name,
-                description: description,
-                inputSchema: inputSchema,
-                outputSchema: outputSchema,
-                handler: handler,
-                toolType: "function",
-                tags: new List<string> { category }
-            );
+            Properties.Settings.Default.EnabledTools = string.Join(";", enabledTools.Concat(disabledTools));
+            Properties.Settings.Default.Save();
+        }
+        
+        /// <summary>
+        /// Trigger the ToolsChanged event
+        /// </summary>
+        private void OnToolsChanged()
+        {
+            ToolsChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }

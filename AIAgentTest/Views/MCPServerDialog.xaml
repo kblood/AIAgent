@@ -5,9 +5,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:AIAgentTest.Views"
         mc:Ignorable="d"
-        Title="MCP Server Configuration" Height="300" Width="500" 
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
-    <Grid Margin="10">
+        Title="{Binding IsEditing, Converter={StaticResource BoolToEditModeConverter}}"
+        Height="300" Width="400"
+        Background="{DynamicResource WindowBackground}"
+        WindowStartupLocation="CenterOwner">
+    
+    <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -17,43 +20,54 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- Header -->
-        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" 
-                   Text="Configure MCP Server" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
-
-        <!-- Server Name -->
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Server Name:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Name}" Margin="0,5"/>
-
-        <!-- Server URL -->
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="Server URL:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Url}" Margin="0,5"/>
-
-        <!-- Server Type -->
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="Server Type:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding ServerTypes}" 
-                  SelectedItem="{Binding Type}" Margin="0,5"/>
-
-        <!-- Enabled Status -->
-        <CheckBox Grid.Row="4" Grid.Column="1" Content="Enabled" 
-                  IsChecked="{Binding IsEnabled}" Margin="0,10"/>
-
-        <!-- Description -->
-        <TextBlock Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" TextWrapping="Wrap" Margin="0,15,0,0">
-            MCP servers provide additional tools and capabilities to the AI. 
-            Configure the connection details for the server you wish to integrate.
-        </TextBlock>
-
+        
+        <!-- Name -->
+        <Label Grid.Row="0" 
+               Content="Server Name:" 
+               FontWeight="Bold"/>
+        
+        <TextBox Grid.Row="1" 
+                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
+                 Margin="0,0,0,10"/>
+        
+        <!-- Command -->
+        <Label Grid.Row="2" 
+               Content="Server Command:" 
+               FontWeight="Bold"/>
+        
+        <TextBox Grid.Row="3" 
+                 Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" 
+                 Margin="0,0,0,10"/>
+        
+        <!-- Arguments -->
+        <Label Grid.Row="4" 
+               Content="Server Arguments:" 
+               FontWeight="Bold"/>
+        
+        <TextBox Grid.Row="5" 
+                 Text="{Binding ArgsString, UpdateSourceTrigger=PropertyChanged}" 
+                 Margin="0,0,0,10"
+                 ToolTip="Enter arguments separated by spaces. Example: -y @modelcontextprotocol/server-filesystem C:\Users\username\Documents"/>
+        
+        <!-- IsEnabled -->
+        <CheckBox Grid.Row="6" 
+                  Content="Enable Server" 
+                  IsChecked="{Binding IsEnabled}"
+                  Margin="0,0,0,10"/>
+        
         <!-- Buttons -->
-        <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" 
-                    Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-            <Button Content="Cancel" Width="80" Margin="0,0,10,0" Click="CancelButton_Click"/>
-            <Button Content="Save" Width="80" Click="SaveButton_Click" IsDefault="True"/>
+        <StackPanel Grid.Row="7" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right">
+            <Button Content="Cancel" 
+                    Width="80" 
+                    Click="CancelButton_Click" 
+                    Margin="0,0,10,0"/>
+            
+            <Button Content="Save" 
+                    Width="80" 
+                    Click="SaveButton_Click"
+                    IsEnabled="{Binding IsValid}"/>
         </StackPanel>
     </Grid>
 </Window>

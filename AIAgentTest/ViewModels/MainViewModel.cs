@@ -12,6 +12,8 @@ namespace AIAgentTest.ViewModels
         
         private bool _isLightTheme;
         private bool _isModelSelectionVisible = true;
+    private bool _isToolManagerVisible = false;
+    private bool _isMCPServerManagerVisible = false;
         
         public bool IsLightTheme
         {
@@ -30,36 +32,56 @@ namespace AIAgentTest.ViewModels
         
         public bool IsModelSelectionVisible
         {
-            get => _isModelSelectionVisible;
-            set => SetProperty(ref _isModelSelectionVisible, value);
+        get => _isModelSelectionVisible;
+        set => SetProperty(ref _isModelSelectionVisible, value);
         }
+    
+    public bool IsToolManagerVisible
+    {
+        get => _isToolManagerVisible;
+        set => SetProperty(ref _isToolManagerVisible, value);
+    }
+    
+    public bool IsMCPServerManagerVisible
+    {
+        get => _isMCPServerManagerVisible;
+        set => SetProperty(ref _isMCPServerManagerVisible, value);
+    }
         
         // Child View Models
         public ModelSelectionViewModel ModelVM { get; }
         public CodeViewModel CodeVM { get; }
         public DebugViewModel DebugVM { get; }
         public ChatSessionViewModel ChatVM { get; }
+    public ToolManagerViewModel ToolManagerVM { get; set; }
+    public MCPServerManagerViewModel MCPServerManagerVM { get; set; }
         
         // Commands
         public ICommand ToggleLightThemeCommand { get; }
         public ICommand ToggleDarkThemeCommand { get; }
         public ICommand ToggleDebugCommand { get; }
         public ICommand ToggleModelSelectionCommand { get; }
-        public ICommand ExitCommand { get; }
-        public ICommand ShowAboutCommand { get; }
+        public ICommand ToggleToolManagerCommand { get; }
+        public ICommand ToggleMCPServerManagerCommand { get; }
+    public ICommand ExitCommand { get; }
+    public ICommand ShowAboutCommand { get; }
         
         public MainViewModel(
-            ThemeService themeService,
-            ModelSelectionViewModel modelVM,
-            CodeViewModel codeVM,
-            DebugViewModel debugVM,
-            ChatSessionViewModel chatVM)
+        ThemeService themeService,
+        ModelSelectionViewModel modelVM,
+        CodeViewModel codeVM,
+        DebugViewModel debugVM,
+        ChatSessionViewModel chatVM,
+        ToolManagerViewModel toolManagerVM = null,
+        MCPServerManagerViewModel mcpServerManagerVM = null)
         {
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             ModelVM = modelVM ?? throw new ArgumentNullException(nameof(modelVM));
             CodeVM = codeVM ?? throw new ArgumentNullException(nameof(codeVM));
             DebugVM = debugVM ?? throw new ArgumentNullException(nameof(debugVM));
             ChatVM = chatVM ?? throw new ArgumentNullException(nameof(chatVM));
+        ToolManagerVM = toolManagerVM;
+        MCPServerManagerVM = mcpServerManagerVM;
             
             // Initialize properties
             _isLightTheme = Properties.Settings.Default.IsLightTheme;
@@ -69,8 +91,10 @@ namespace AIAgentTest.ViewModels
             ToggleDarkThemeCommand = new RelayCommand(() => IsLightTheme = false);
             ToggleDebugCommand = new RelayCommand(() => DebugVM.IsVisible = !DebugVM.IsVisible);
             ToggleModelSelectionCommand = new RelayCommand(() => IsModelSelectionVisible = !IsModelSelectionVisible);
-            ExitCommand = new RelayCommand(() => System.Windows.Application.Current.Shutdown());
-            ShowAboutCommand = new RelayCommand(ShowAbout);
+            ToggleToolManagerCommand = new RelayCommand(() => IsToolManagerVisible = !IsToolManagerVisible, () => ToolManagerVM != null);
+            ToggleMCPServerManagerCommand = new RelayCommand(() => IsMCPServerManagerVisible = !IsMCPServerManagerVisible, () => MCPServerManagerVM != null);
+        ExitCommand = new RelayCommand(() => System.Windows.Application.Current.Shutdown());
+        ShowAboutCommand = new RelayCommand(ShowAbout);
             
             // Set initial theme
             _themeService.SetTheme(IsLightTheme ? ThemeType.Light : ThemeType.Dark);

@@ -55,40 +55,57 @@
                                   Converter={StaticResource BooleanToVisibilityConverter}}"/>
         
         <!-- Main Content -->
-        <Grid Margin="10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"
-                                  x:Name="DebugColumn">
-                    <ColumnDefinition.Style>
-                        <Style TargetType="ColumnDefinition">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding DebugVM.IsVisible}" Value="False">
-                                    <Setter Property="Width" Value="0"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ColumnDefinition.Style>
-                </ColumnDefinition>
-            </Grid.ColumnDefinitions>
+        <TabControl Margin="10">
+            <!-- Main Chat Tab -->
+            <TabItem Header="Chat">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"
+                                          x:Name="DebugColumn">
+                            <ColumnDefinition.Style>
+                                <Style TargetType="ColumnDefinition">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DebugVM.IsVisible}" Value="False">
+                                            <Setter Property="Width" Value="0"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ColumnDefinition.Style>
+                        </ColumnDefinition>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Code Panel -->
+                    <local:CodePanel Grid.Column="0"
+                                    DataContext="{Binding CodeVM}"
+                                    Margin="0,0,5,0"/>
+                    
+                    <!-- Chat Panel -->
+                    <local:ChatPanel x:Name="chatPanel"
+                                   Grid.Column="1"
+                                   DataContext="{Binding ChatVM}"
+                                   Margin="5,0"/>
+                    
+                    <!-- Debug Panel -->
+                    <local:DebugPanel Grid.Column="2"
+                                     DataContext="{Binding DebugVM}"
+                                     Margin="5,0,0,0"
+                                     Visibility="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </Grid>
+            </TabItem>
             
-            <!-- Code Panel -->
-            <local:CodePanel Grid.Column="0"
-                            DataContext="{Binding CodeVM}"
-                            Margin="0,0,5,0"/>
+            <!-- Tools Tab -->
+            <TabItem Header="Tools" 
+                     Visibility="{Binding ToolManagerVM, Converter={StaticResource NullToVisibilityConverter}}">
+                <local:ToolManagerPanel DataContext="{Binding ToolManagerVM}" />
+            </TabItem>
             
-            <!-- Chat Panel -->
-            <local:ChatPanel x:Name="chatPanel"
-                           Grid.Column="1"
-                           DataContext="{Binding ChatVM}"
-                           Margin="5,0"/>
-            
-            <!-- Debug Panel -->
-            <local:DebugPanel Grid.Column="2"
-                             DataContext="{Binding DebugVM}"
-                             Margin="5,0,0,0"
-                             Visibility="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-        </Grid>
+            <!-- MCP Servers Tab -->
+            <TabItem Header="MCP Servers" 
+                     Visibility="{Binding MCPServerManagerVM, Converter={StaticResource NullToVisibilityConverter}}">
+                <local:MCPServerManagerPanel DataContext="{Binding MCPServerManagerVM}" />
+            </TabItem>
+        </TabControl>
     </DockPanel>
 </Window>
