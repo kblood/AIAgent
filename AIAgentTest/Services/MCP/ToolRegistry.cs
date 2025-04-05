@@ -103,6 +103,16 @@ namespace AIAgentTest.Services.MCP
         }
         
         /// <summary>
+        /// Check if a tool exists
+        /// </summary>
+        /// <param name="name">Tool name</param>
+        /// <returns>True if tool exists</returns>
+        public bool ToolExists(string name)
+        {
+            return _tools.ContainsKey(name);
+        }
+        
+        /// <summary>
         /// Enable a tool
         /// </summary>
         /// <param name="name">Tool name</param>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using AIAgentTest.Common;
 
 namespace AIAgentTest.Services.MCP
 {
@@ -42,7 +43,7 @@ namespace AIAgentTest.Services.MCP
         /// <summary>
         /// Parameters for the tool
         /// </summary>
-        public Dictionary<string, ParameterDefinition> Parameters { get; set; } = new Dictionary<string, ParameterDefinition>();
+        public Dictionary<string, MCPParameterDefinition> Parameters { get; set; } = new Dictionary<string, MCPParameterDefinition>();
         
         /// <summary>
         /// Tool type

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using AIAgentTest.Common;
 
 namespace AIAgentTest.API_Clients
 {
@@ -109,15 +110,5 @@ namespace AIAgentTest.API_Clients
         public Dictionary<string, ParameterDefinition> Parameters { get; set; } = new Dictionary<string, ParameterDefinition>();
     }
     
-    /// <summary>
-    /// Parameter definition for function calling
-    /// </summary>
-    public class ParameterDefinition
-    {
-        public string Type { get; set; }
-        public string Description { get; set; }
-        public bool Required { get; set; }
-        public object DefaultValue { get; set; }
-        public Dictionary<string, object> Constraints { get; set; } = new Dictionary<string, object>();
-    }
+    // Using common ParameterDefinition from AIAgentTest.Common
 }

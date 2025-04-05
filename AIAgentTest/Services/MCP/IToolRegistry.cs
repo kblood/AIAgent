@@ -42,6 +42,13 @@ namespace AIAgentTest.Services.MCP
         ToolDefinition GetToolDefinition(string name);
         
         /// <summary>
+        /// Check if a tool exists
+        /// </summary>
+        /// <param name="name">Tool name</param>
+        /// <returns>True if tool exists</returns>
+        bool ToolExists(string name);
+        
+        /// <summary>
         /// Enable a tool
         /// </summary>
         /// <param name="name">Tool name</param>

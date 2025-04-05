@@ -6,7 +6,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AIAgentTest.Services.MCP;
-using MCPParameterDefinition = AIAgentTest.Services.MCP.ParameterDefinition;
+// Don't need Common anymore
+// using AIAgentTest.Common;
 
 namespace AIAgentTest.API_Clients.MCP
 {

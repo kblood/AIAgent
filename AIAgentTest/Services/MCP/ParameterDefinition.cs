@@ -1,35 +1,14 @@
+// Redirect to common parameter definition
+using AIAgentTest.Common;
 using System.Collections.Generic;
 
 namespace AIAgentTest.Services.MCP
 {
     /// <summary>
-    /// Definition of a parameter for a tool
+    /// Definition of a parameter for a tool (using common implementation)
     /// </summary>
-    public class ParameterDefinition
+    public class MCPParameterDefinition : AIAgentTest.Common.ParameterDefinition
     {
-        /// <summary>
-        /// Type of the parameter
-        /// </summary>
-        public string Type { get; set; }
-        
-        /// <summary>
-        /// Description of the parameter
-        /// </summary>
-        public string Description { get; set; }
-        
-        /// <summary>
-        /// Whether the parameter is required
-        /// </summary>
-        public bool Required { get; set; }
-        
-        /// <summary>
-        /// Default value for the parameter
-        /// </summary>
-        public object DefaultValue { get; set; }
-        
-        /// <summary>
-        /// Constraints for the parameter
-        /// </summary>
-        public Dictionary<string, object> Constraints { get; set; } = new Dictionary<string, object>();
+        // Inherits all properties from common definition
     }
 }

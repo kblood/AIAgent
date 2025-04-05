@@ -1,27 +1,9 @@
 using System.Collections.Generic;
+using AIAgentTest.Common;
 
 namespace AIAgentTest.API_Clients.MCP
 {
-    /// <summary>
-    /// Parameter definition for a function
-    /// </summary>
-    public class ParameterDefinition
-    {
-        /// <summary>
-        /// Parameter type
-        /// </summary>
-        public string Type { get; set; }
-        
-        /// <summary>
-        /// Parameter description
-        /// </summary>
-        public string Description { get; set; }
-        
-        /// <summary>
-        /// Whether the parameter is required
-        /// </summary>
-        public bool Required { get; set; }
-    }
+    // Using common ParameterDefinition from AIAgentTest.Common
     
     /// <summary>
     /// Definition of a function for function calling

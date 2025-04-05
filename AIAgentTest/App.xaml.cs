@@ -115,6 +115,9 @@ namespace AIAgentTest
 #if DEBUG
             // Run MVVM architecture tests in debug mode
             Testing.MVVMTester.RunTests().ConfigureAwait(false);
+            
+            // Run MCP tool call parsing tests
+            Tests.MCPToolCallParsingTest.ValidateToolCallParsing().ConfigureAwait(false);
 #endif
         }
 
