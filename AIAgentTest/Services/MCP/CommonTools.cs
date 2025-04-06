@@ -24,6 +24,26 @@ namespace AIAgentTest.Services.MCP
             if (registry == null)
                 throw new ArgumentNullException(nameof(registry));
             
+            // Register list_tools tool
+            registry.RegisterTool(
+                new ToolDefinition
+                {
+                    Name = "list_tools",
+                    Description = "List available tools and their descriptions",
+                    Schema = JsonSerializer.Serialize(new
+                    {
+                        type = "object",
+                        properties = new { },
+                    }),
+                    Tags = new[] { "Meta", "System" },
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "friendly_name", "List Tools" },
+                        { "priority", 0 }
+                    }
+                },
+                ListToolsHandler);
+            
             // Register date/time tool
             registry.RegisterTool(
                 new ToolDefinition
@@ -89,6 +109,41 @@ namespace AIAgentTest.Services.MCP
                     Tags = new[] { "File System" }
                 },
                 ListDirectoryHandler);
+        }
+        
+        /// <summary>
+        /// Handle list_tools requests
+        /// </summary>
+        /// <param name="input">Tool input</param>
+        /// <returns>Tool result</returns>
+        private async Task<object> ListToolsHandler(object input)
+        {
+            Console.WriteLine($"ListToolsHandler called with input: {JsonSerializer.Serialize(input)}");
+            
+            // Get the tool registry from the service provider
+            var toolRegistry = ServiceProvider.GetService<IToolRegistry>();
+            if (toolRegistry == null)
+            {
+                return new { error = "Tool registry not available" };
+            }
+            
+            // Get all registered tools
+            var tools = toolRegistry.GetAllTools();
+            
+            // Format the tools for display
+            var result = new
+            {
+                tools = tools.Select(t => new
+                {
+                    name = t.Name,
+                    description = t.Description,
+                    tags = t.Tags,
+                    schema = t.Schema
+                }).ToList()
+            };
+            
+            Console.WriteLine($"ListToolsHandler returning information about {tools.Count} tools");
+            return result;
         }
         
         /// <summary>

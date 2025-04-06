@@ -29,5 +29,16 @@ namespace AIAgentTest.API_Clients.MCP
         /// </summary>
         /// <returns>True if available</returns>
         Task<bool> IsAvailableAsync();
+        
+        /// <summary>
+        /// Start the server process
+        /// </summary>
+        /// <returns>Whether the server was started successfully</returns>
+        Task<bool> StartServerAsync();
+        
+        /// <summary>
+        /// Stop the server process
+        /// </summary>
+        void StopServer();
     }
 }

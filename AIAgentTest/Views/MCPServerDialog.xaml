@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:AIAgentTest.Views"
         mc:Ignorable="d"
-        Title="{Binding IsEditing, Converter={StaticResource BoolToEditModeConverter}}"
+        Title="MCP Server Configuration"
         Height="300" Width="400"
         Background="{DynamicResource WindowBackground}"
         WindowStartupLocation="CenterOwner">
@@ -27,7 +27,7 @@
                FontWeight="Bold"/>
         
         <TextBox Grid.Row="1" 
-                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
+                 Text="{Binding ServerName, UpdateSourceTrigger=PropertyChanged}" 
                  Margin="0,0,0,10"/>
         
         <!-- Command -->
@@ -45,7 +45,7 @@
                FontWeight="Bold"/>
         
         <TextBox Grid.Row="5" 
-                 Text="{Binding ArgsString, UpdateSourceTrigger=PropertyChanged}" 
+                 Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" 
                  Margin="0,0,0,10"
                  ToolTip="Enter arguments separated by spaces. Example: -y @modelcontextprotocol/server-filesystem C:\Users\username\Documents"/>
         

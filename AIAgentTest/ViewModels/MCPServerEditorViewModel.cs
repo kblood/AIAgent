@@ -15,6 +15,9 @@ namespace AIAgentTest.ViewModels
         private string _argsString;
         private bool _isEnabled;
         private bool _isEditing;
+        private bool _isEditMode;
+        private string _serverName;
+        private string _arguments;
         
         /// <summary>
         /// Server name
@@ -104,6 +107,47 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
+        /// Whether the server is in edit mode
+        /// </summary>
+        public bool IsEditMode
+        {
+            get => _isEditMode;
+            set => SetProperty(ref _isEditMode, value);
+        }
+
+        /// <summary>
+        /// Server name property for dialog
+        /// </summary>
+        public string ServerName
+        {
+            get => _serverName ?? _name;
+            set 
+            {
+                if (SetProperty(ref _serverName, value))
+                {
+                    _name = value;
+                    ValidateProperties();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Arguments for dialog
+        /// </summary>
+        public string Arguments
+        {
+            get => _arguments ?? _argsString;
+            set 
+            {
+                if (SetProperty(ref _arguments, value))
+                {
+                    _argsString = value;
+                    ValidateProperties();
+                }
+            }
+        }
+        
+        /// <summary>
         /// Whether the server is being edited
         /// </summary>
         public bool IsEditing
@@ -125,7 +169,7 @@ namespace AIAgentTest.ViewModels
         /// </summary>
         public List<(string name, string command, string args)> ServerPresets { get; } = new List<(string, string, string)>
         {
-            ("FileSystem", "npx", "-y @modelcontextprotocol/server-filesystem C:\\Users\\Documents")
+            ("FileSystem", "npx", "-y @modelcontextprotocol/server-filesystem C:\\")
         };
         
         /// <summary>

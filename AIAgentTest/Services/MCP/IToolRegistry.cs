@@ -72,5 +72,11 @@ namespace AIAgentTest.Services.MCP
         /// </summary>
         /// <returns>List of tool definitions</returns>
         List<ToolDefinition> GetAllToolDefinitions();
+        
+        /// <summary>
+        /// Get all tools including their definitions
+        /// </summary>
+        /// <returns>List of all tools</returns>
+        List<ToolDefinition> GetAllTools();
     }
 }

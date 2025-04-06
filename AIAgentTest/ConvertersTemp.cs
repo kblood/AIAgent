@@ -3,9 +3,9 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace AIAgentTest.Views
+namespace AIAgentTest
 {
-    public class NullToVisibilityConverter : IValueConverter
+    public class TempNullToVisibilityConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
@@ -18,7 +18,7 @@ namespace AIAgentTest.Views
         }
     }
     
-    public class BoolToVisibilityConverter : IValueConverter
+    public class TempBoolToVisibilityConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
@@ -39,7 +39,7 @@ namespace AIAgentTest.Views
         }
     }
     
-    public class BoolToStringConverter : IValueConverter
+    public class TempBoolToStringConverter : IValueConverter
     {
         public string TrueValue { get; set; } = "True";
         public string FalseValue { get; set; } = "False";

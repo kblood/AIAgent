@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -12,11 +13,13 @@ namespace AIAgentTest.ViewModels
 {
     public class DebugViewModel : ViewModelBase
     {
-        private readonly IContextManager _contextManager;
+        private IContextManager _contextManager;
         
         private bool _isVisible = true;
         private string _debugContent;
         private string _technicalContext;
+    private ObservableCollection<string> _logEntries;
+    
         
         public bool IsVisible
         {
@@ -32,19 +35,27 @@ namespace AIAgentTest.ViewModels
         
         public string TechnicalContext
         {
-            get => _technicalContext;
-            set => SetProperty(ref _technicalContext, value);
+        get => _technicalContext;
+        set => SetProperty(ref _technicalContext, value);
         }
+    
+    public ObservableCollection<string> LogEntries
+    {
+        get => _logEntries;
+        set => SetProperty(ref _logEntries, value);
+    }
         
         // Commands
         public ICommand ShowContextCommand { get; }
         public ICommand ClearContextCommand { get; }
         public ICommand SummarizeContextCommand { get; }
+    public ICommand ClearLogsCommand { get; }
         
         public DebugViewModel(IContextManager contextManager)
         {
-            _contextManager = contextManager ?? throw new ArgumentNullException(nameof(contextManager));
-            
+        _contextManager = contextManager; // Allow null for initialization; will be set later if necessary
+        _logEntries = new ObservableCollection<string>();
+        
             // Initialize with default values
             _isVisible = true;
             _debugContent = "Debug window is initializing...";
@@ -53,20 +64,32 @@ namespace AIAgentTest.ViewModels
             ShowContextCommand = new RelayCommand(ShowTechnicalContext);
             ClearContextCommand = new RelayCommand(ClearContext);
             SummarizeContextCommand = new RelayCommand(async () => await SummarizeContext());
+        ClearLogsCommand = new RelayCommand(() => ClearLog());
             
             // Show initial debug info safely
             try
             {
-                DebugContent = $"Debug window initialized at {DateTime.Now}.\n\n";
+            DebugContent = $"Debug window initialized at {DateTime.Now}.\n\n";
+            
+            if (_contextManager != null)
+            {
                 DebugContent += $"Context Manager Type: {_contextManager.GetType().Name}\n\n";
                 DebugContent += _contextManager.GetDebugInfo();
                 
-                // Check for MCPContextManager specifically
+            // Check for MCPContextManager specifically
                 if (_contextManager is IMCPContextManager)
-                {
+                    {
                     DebugContent += "\n\n[MCP Context Manager detected]";
                 }
             }
+            else
+            {
+                DebugContent += "Context Manager not initialized yet.";
+            }
+            
+            // Add first log entry
+            AddLogEntry("Debug logging initialized");
+        }
             catch (Exception ex)
             {
                 DebugContent = $"Error initializing debug window: {ex.Message}\n{ex.StackTrace}";
@@ -128,11 +151,15 @@ private void ShowTechnicalContext()
                         contextBuilder.AppendLine();
                     }
                 }
-                else
+                else if (_contextManager != null)
                 {
                     // Fallback to getting context from the context manager
                     string context = _contextManager.GetFullContext();
                     contextBuilder.AppendLine(context);
+                }
+                else
+                {
+                    contextBuilder.AppendLine("No context available - context manager not initialized.");
                 }
                 
                 // Add token statistics
@@ -145,12 +172,17 @@ private void ShowTechnicalContext()
                     contextBuilder.AppendLine("\n=== TOKEN STATISTICS ===\n");
                     contextBuilder.AppendLine(mcpContextManager.GetTokenStatistics());
                 }
-                else
+                else if (_contextManager != null)
                 {
                     // Add basic token statistics
                     contextBuilder.AppendLine("\n=== TOKEN STATISTICS ===\n");
                     int totalTokens = TokenCounterUtility.EstimateTokenCount(contextBuilder.ToString());
                     contextBuilder.AppendLine($"Approximate Context Size: {totalTokens} tokens");
+                }
+                else
+                {
+                    contextBuilder.AppendLine("\n=== TOKEN STATISTICS ===\n");
+                    contextBuilder.AppendLine("No statistics available - context manager not initialized.");
                 }
                 
                 TechnicalContext = contextBuilder.ToString();
@@ -164,42 +196,114 @@ private void ShowTechnicalContext()
         
         private void ClearContext()
         {
-            try
-            {
+        try
+        {
+        if (_contextManager != null)
+        {
                 _contextManager.ClearContext();
                 DebugContent = "Context cleared.";
             }
-            catch (Exception ex)
+        else
             {
-                DebugContent = $"Error clearing context: {ex.Message}\n{ex.StackTrace}";
+                    DebugContent = "Context Manager not initialized yet.";
             }
         }
+        catch (Exception ex)
+        {
+            DebugContent = $"Error clearing context: {ex.Message}\n{ex.StackTrace}";
+        }
+    }
         
         private async Task SummarizeContext()
         {
-            try
+        try
+        {
+            AddLogEntry("Attempting to summarize context...");
+            
+            if (_contextManager == null)
             {
-                // Check if we have a regular context manager or an MCP context manager
-                if (_contextManager is IMCPContextManager mcpContextManager)
+                DebugContent = "Context Manager not initialized yet.";
+                AddLogEntry("Error: Context Manager not initialized yet.");
+                
+                // Try to get it from the service provider
+                var contextManager = ServiceProvider.GetService<IContextManager>();
+                if (contextManager != null)
                 {
-                    // For MCP context manager, show more detailed status
-                    DebugContent = "Summarizing MCP context...";
-                    await mcpContextManager.SummarizeContext(mcpContextManager.DefaultModel);
-                    DebugContent = "Context has been summarized. Here's the updated context:\n\n";
-                    DebugContent += mcpContextManager.GetFullContext();
+                    AddLogEntry("Found context manager in service provider. Updating reference.");
+                    _contextManager = contextManager;
+                    DebugContent = $"Context Manager found: {_contextManager.GetType().Name}";
                 }
                 else
                 {
-                    // For regular context manager
-                    DebugContent = "Summarizing context...";
-                    await _contextManager.SummarizeContext(_contextManager.DefaultModel);
-                    DebugContent = _contextManager.GetDebugInfo();
+                    AddLogEntry("Could not find context manager in service provider.");
+                    return;
                 }
             }
-            catch (Exception ex)
+
+            // Check if we have a regular context manager or an MCP context manager
+            if (_contextManager is IMCPContextManager mcpContextManager)
             {
-                DebugContent = $"Error summarizing context: {ex.Message}\n{ex.StackTrace}";
+                // For MCP context manager, show more detailed status
+                DebugContent = "Summarizing MCP context...";
+                AddLogEntry("Using MCP context manager");
+                await mcpContextManager.SummarizeContext(mcpContextManager.DefaultModel ?? "llama3");
+                DebugContent = "Context has been summarized. Here's the updated context:\n\n";
+                DebugContent += mcpContextManager.GetFullContext();
             }
+            else
+            {
+                // For regular context manager
+                DebugContent = "Summarizing context...";
+                AddLogEntry("Using standard context manager");
+                await _contextManager.SummarizeContext(_contextManager.DefaultModel ?? "llama3");
+                DebugContent = _contextManager.GetDebugInfo();
+            }
+            
+            AddLogEntry("Context summarization completed successfully");
         }
+        catch (Exception ex)
+        {
+            DebugContent = $"Error summarizing context: {ex.Message}\n{ex.StackTrace}";
+            AddLogEntry($"Error summarizing context: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Add a log entry to the debug panel
+    /// </summary>
+    /// <param name="entry">Log entry text</param>
+    public void AddLogEntry(string entry)
+    {
+        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+        System.Windows.Application.Current.Dispatcher.Invoke(() => {
+            LogEntries.Add($"[{timestamp}] {entry}");
+            
+            // Limit log size to prevent performance issues
+            if (LogEntries.Count > 1000)
+            {
+                LogEntries.RemoveAt(0);
+            }
+        });
+    }
+    
+    /// <summary>
+    /// Clear all log entries
+    /// </summary>
+    public void ClearLog()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() => {
+            LogEntries.Clear();
+            AddLogEntry("Log cleared");
+        });
+    }
+    
+    /// <summary>
+    /// Update the context manager reference
+    /// </summary>
+    public IContextManager ContextManager
+    {
+        get => _contextManager;
+        set => _contextManager = value;
+    }
     }
 }

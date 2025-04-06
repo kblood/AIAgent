@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using AIAgentTest.Services.Interfaces;
 using AIAgentTest.Services.MCP;
+using System.Threading.Tasks;
 
 namespace AIAgentTest.API_Clients.MCP
 {
@@ -114,6 +116,82 @@ namespace AIAgentTest.API_Clients.MCP
         public IMCPServerClient GetMCPServer(string serverName)
         {
             return _serverClients.TryGetValue(serverName, out var server) ? server : null;
+        }
+        
+        /// <summary>
+        /// Gets all registered server names
+        /// </summary>
+        /// <returns>List of registered server names</returns>
+        public List<string> GetAllRegisteredServers()
+        {
+            return _serverClients.Keys.ToList();
+        }
+        
+        /// <summary>
+        /// Get a list of all registered MCP server names
+        /// </summary>
+        /// <returns>List of server names</returns>
+        public List<string> GetRegisteredServerNames()
+        {
+            return _serverClients.Keys.ToList();
+        }
+
+        /// <summary>
+        /// Get server configurations as a dictionary
+        /// </summary>
+        /// <returns>Dictionary of server configurations</returns>
+        public Dictionary<string, IMCPServerClient> GetRegisteredServers()
+        {
+            return new Dictionary<string, IMCPServerClient>(_serverClients);
+        }
+        
+        /// <summary>
+        /// Register a new StdioMCPServerClient with the factory
+        /// </summary>
+        /// <param name="serverName">Name for the server (e.g., "FileServer")</param>
+        /// <param name="command">Command to run (e.g., "npx")</param>
+        /// <param name="arguments">Arguments for the command</param>
+        /// <param name="workingDirectory">Optional working directory</param>
+        /// <param name="logger">Optional debug logger</param>
+        /// <returns>The registered client</returns>
+        public IMCPServerClient RegisterStdioMCPServer(string serverName, string command, string[] arguments, 
+            string workingDirectory = null, IDebugLogger logger = null)
+        {
+            // Standardize server name
+            if (serverName.Equals("fileserver", StringComparison.OrdinalIgnoreCase))
+            {
+                serverName = "FileServer";  // Use consistent capitalization
+            }
+            
+            // Create the StdioMCPServerClient
+            var mcpClient = new StdioMCPServerClient(command, arguments, workingDirectory, logger);
+            
+            // Register it with the factory
+            RegisterMCPServer(serverName, mcpClient);
+            
+            return mcpClient;
+        }
+        
+        /// <summary>
+        /// Register a new StdioMCPServerClient for the filesystem server
+        /// </summary>
+        /// <param name="targetDirectory">Directory to provide access to</param>
+        /// <param name="logger">Optional debug logger</param>
+        /// <returns>The registered client</returns>
+        public IMCPServerClient RegisterFilesystemStdioServer(string targetDirectory, IDebugLogger logger = null)
+        {
+            // Build command and arguments
+            string command = "npx";
+            var argsList = new List<string> { "-y", "@modelcontextprotocol/server-filesystem", "--stdio" };
+            
+            // Add target directory if specified
+            if (!string.IsNullOrEmpty(targetDirectory))
+            {
+                argsList.Add(targetDirectory);
+            }
+            
+            // Create and register the client
+            return RegisterStdioMCPServer("FileServer", command, argsList.ToArray(), targetDirectory, logger);
         }
     }
 }

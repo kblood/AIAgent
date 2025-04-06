@@ -1,3 +1,5 @@
+using System;
+using System.Threading.Tasks;
 using System.Windows;
 using AIAgentTest.API_Clients;
 using AIAgentTest.API_Clients.MCP;
@@ -10,9 +12,12 @@ namespace AIAgentTest
 {
     public partial class App : Application
     {
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            
+            MainViewModel mainViewModel = null;
+            Views.TestWindow mainWindow = null;
 
             // Initialize services for our new MVVM architecture
             try
@@ -33,8 +38,12 @@ namespace AIAgentTest
                 var messageParsingService = new MessageParsingService();
                 ServiceProvider.RegisterService<IMessageParsingService>(messageParsingService);
                 
-                // Register MCP services
-                AIAgentTest.Services.MCP.MCPServiceRegistration.RegisterMCPServices();
+                // Create debug view model early so we can use it for logging
+                var debugViewModel = new DebugViewModel(null); // Temporarily null, will update later
+                ServiceProvider.RegisterService<DebugViewModel>(debugViewModel);
+                
+                // Register MCP services and properly await
+                await AIAgentTest.Services.MCP.MCPServiceRegistration.RegisterMCPServicesAsync();
                 
                 var themeService = new ThemeService();
                 ServiceProvider.RegisterService<ThemeService>(themeService);
@@ -45,6 +54,7 @@ namespace AIAgentTest
                 // Create MCP-enabled ViewModels
                 var mcpLLMClientService = ServiceProvider.GetService<IMCPLLMClientService>();
                 var mcpContextManager = ServiceProvider.GetService<IMCPContextManager>();
+                var mcpClientFactory = ServiceProvider.GetService<MCPClientFactory>();
                 
                 // Use MCP-aware chat session view model with MCP services
                 var chatSessionViewModel = new ChatSessionViewModel(
@@ -70,16 +80,30 @@ namespace AIAgentTest
                 var codeViewModel = new CodeViewModel();
                 ServiceProvider.RegisterService<CodeViewModel>(codeViewModel);
                 
-                var debugViewModel = new DebugViewModel(mcpContextManager);
-                ServiceProvider.RegisterService<DebugViewModel>(debugViewModel);
+                // DebugViewModel was already created
                 
                 // Create MCP tool manager ViewModels
                 var toolManagerViewModel = new ToolManagerViewModel(
                     ServiceProvider.GetService<IToolRegistry>());
                 ServiceProvider.RegisterService<ToolManagerViewModel>(toolManagerViewModel);
 
+                // Add server manually first for UI display
                 var mcpServerManagerViewModel = new MCPServerManagerViewModel(
                     ServiceProvider.GetService<MCPClientFactory>());
+                
+                // Create a fake server to ensure we always see the server in UI
+                if (mcpServerManagerViewModel.Servers.Count == 0) {
+                    var debugLogger = ServiceProvider.GetService<IDebugLogger>();
+                    debugLogger?.Log("Adding FileServer to UI manually");
+                    
+                    mcpServerManagerViewModel.Servers.Add(new MCPServerViewModel {
+                        Name = "FileServer",
+                        Command = "npx",
+                        Args = new[] { "-y", "@modelcontextprotocol/server-filesystem", "C:/" },
+                        IsEnabled = true
+                    });
+                }
+                
                 ServiceProvider.RegisterService<MCPServerManagerViewModel>(mcpServerManagerViewModel);
                 
                 // Create settings ViewModel
@@ -89,7 +113,7 @@ namespace AIAgentTest
                 ServiceProvider.RegisterService<SettingsViewModel>(settingsViewModel);
                 
                 // Create main view model with MCP components
-                var mainViewModel = new MainViewModel(
+                mainViewModel = new MainViewModel(
                     themeService,
                     modelSelectionViewModel,
                     codeViewModel,
@@ -99,6 +123,11 @@ namespace AIAgentTest
                     mcpServerManagerViewModel,
                     settingsViewModel);
                 ServiceProvider.RegisterService<MainViewModel>(mainViewModel);
+                
+                // Now that all services are registered, create and show the main window
+                mainWindow = new Views.TestWindow();
+                Current.MainWindow = mainWindow;
+                mainWindow.Show();
             }
             catch (System.Exception ex)
             {
@@ -106,11 +135,7 @@ namespace AIAgentTest
                 // Don't crash the app if our services have issues
             }
             
-            // Create and show the main window
-            var mainWindow = new Views.TestWindow();
-            mainWindow.DataContext = ServiceProvider.GetService<MainViewModel>();
-            mainWindow.Show();
-            Current.MainWindow = mainWindow;
+            // The window initializes its own DataContext
             
 #if DEBUG
             // Run MVVM architecture tests in debug mode

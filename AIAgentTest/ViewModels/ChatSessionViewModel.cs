@@ -193,6 +193,24 @@ namespace AIAgentTest.ViewModels
                 // Check if the model supports MCP
                 if (_llmClientService.ModelSupportsMCP(SelectedModel) && _toolRegistry != null)
                 {
+                    // Get all available tools for debugging
+                    var availableTools = _toolRegistry.GetTools();
+                    Console.WriteLine($"Available tools ({availableTools.Count}): " + 
+                        string.Join(", ", availableTools.Select(t => t.Name)));
+                        
+                    // Show a message to the user that MCP is enabled
+                    if (availableTools.Count > 0) {
+                        var userDocumentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        var toolTip = "[System: Model has access to these tools: " + 
+                            string.Join(", ", availableTools.Select(t => t.Name)) + "]\n\n" +
+                            "Try asking questions like: \n" +
+                            $"- List files in {userDocumentsPath}\n" +
+                            $"- Create a text file with content 'Hello World' in {userDocumentsPath}\\test.txt\n" +
+                            "- What time is it?\n\n";
+                            
+                        AppendTextAction?.Invoke(toolTip);
+                    }
+                    
                     await ProcessWithMCP(InputText);
                 }
                 else

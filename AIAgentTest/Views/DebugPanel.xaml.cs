@@ -2,7 +2,9 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Text;
 using AIAgentTest.ViewModels;
+using System.Threading;
 
 namespace AIAgentTest.Views
 {
@@ -32,6 +34,101 @@ namespace AIAgentTest.Views
                 // Initial update
                 UpdateDebugDisplay(viewModel.DebugContent);
             }
+        }
+        
+        private void CopyLogs_Click(object sender, RoutedEventArgs e)
+        {
+        if (DataContext is DebugViewModel viewModel)
+        {
+        try
+        {
+        StringBuilder logContent = new StringBuilder();
+        
+        // Get all log entries
+        if (viewModel.LogEntries != null && viewModel.LogEntries.Count > 0)
+        {
+        foreach (var entry in viewModel.LogEntries)
+        {
+        logContent.AppendLine(entry);
+        }
+        }
+        else
+        {
+        logContent.AppendLine("No log entries found.");
+        }
+        
+        // Method 1: Try direct clipboard access
+        try {
+            string textToCopy = logContent.ToString();
+                Clipboard.SetText(textToCopy);
+                MessageBox.Show("Logs copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            catch (Exception clipboardEx) {
+                    // Method 2: Try using TextBox as intermediary
+                    try {
+                    var tempTextBox = new TextBox { Text = logContent.ToString() };
+                    tempTextBox.SelectAll();
+                    tempTextBox.Copy();
+                    MessageBox.Show("Logs copied to clipboard!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch {
+                    // Method 3: Last resort - save to file
+                    MessageBox.Show($"Could not access clipboard: {clipboardEx.Message}\nTrying to save to file instead.", 
+                                  "Clipboard Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    SaveLogs();
+        }
+        }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error preparing logs: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        }
+        }
+    
+    private void SaveLogs()
+    {
+        if (DataContext is DebugViewModel viewModel)
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    FileName = "MCPLogs_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"),
+                    DefaultExt = ".txt",
+                    Filter = "Text documents (.txt)|*.txt"
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    StringBuilder logContent = new StringBuilder();
+                    
+                    if (viewModel.LogEntries != null && viewModel.LogEntries.Count > 0)
+                    {
+                        foreach (var entry in viewModel.LogEntries)
+                        {
+                            logContent.AppendLine(entry);
+                        }
+                    }
+                    else
+                    {
+                        logContent.AppendLine("No log entries found.");
+                    }
+                    
+                    System.IO.File.WriteAllText(dialog.FileName, logContent.ToString());
+                    MessageBox.Show("Logs saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving logs: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+        
+        private void SaveLogs_Click(object sender, RoutedEventArgs e)
+        {
+            SaveLogs();
         }
         
         private void UpdateDebugDisplay(string content)

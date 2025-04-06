@@ -156,6 +156,15 @@ namespace AIAgentTest.Services.MCP
         }
         
         /// <summary>
+        /// Get all tools including their definitions
+        /// </summary>
+        /// <returns>List of all tools</returns>
+        public List<ToolDefinition> GetAllTools()
+        {
+            return _tools.Values.ToList();
+        }
+        
+        /// <summary>
         /// Get all tool definitions including disabled tools
         /// </summary>
         /// <returns>List of tool definitions</returns>

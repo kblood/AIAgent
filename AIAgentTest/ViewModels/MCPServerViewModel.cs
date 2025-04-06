@@ -1,4 +1,8 @@
 using System;
+using System.Threading.Tasks;
+using AIAgentTest.API_Clients.MCP;
+using AIAgentTest.Services;
+using AIAgentTest.Services.Interfaces;
 
 namespace AIAgentTest.ViewModels
 {
@@ -7,15 +11,19 @@ namespace AIAgentTest.ViewModels
     /// </summary>
     public class MCPServerViewModel : ViewModelBase
     {
+        private readonly IMCPServerClient _client;
         private string _name;
         private string _command;
         private string[] _args;
         private bool _isEnabled;
         private bool _isConnected;
         private bool _isConnecting;
+        private bool _isActive;
+        private bool _isRunning;
         private DateTime? _lastConnectionAttempt;
         private int _availableToolCount;
         private string _connectionError;
+        private IMCPServerClient _serverClient;
         
         /// <summary>
         /// Server name
@@ -98,6 +106,33 @@ namespace AIAgentTest.ViewModels
         }
         
         /// <summary>
+        /// Whether the server is running
+        /// </summary>
+        public bool IsRunning
+        {
+            get => _isRunning;
+            set => SetProperty(ref _isRunning, value);
+        }
+        
+        /// <summary>
+        /// The server client
+        /// </summary>
+        public IMCPServerClient ServerClient
+        {
+            get => _serverClient;
+            set => SetProperty(ref _serverClient, value);
+        }
+        
+        /// <summary>
+        /// Whether the server is active (running)
+        /// </summary>
+        public bool IsActive
+        {
+            get => _isActive;
+            set => SetProperty(ref _isActive, value);
+        }
+        
+        /// <summary>
         /// Whether the server is connecting
         /// </summary>
         public bool IsConnecting
@@ -131,6 +166,56 @@ namespace AIAgentTest.ViewModels
         {
             get => _connectionError;
             set => SetProperty(ref _connectionError, value);
+        }
+        
+        /// <summary>
+        /// Default constructor
+        /// </summary>
+        public MCPServerViewModel()
+        {
+            // Default constructor for binding
+        }
+        
+        /// <summary>
+        /// Constructor with client
+        /// </summary>
+        /// <param name="name">Server name</param>
+        /// <param name="client">MCP client</param>
+        public MCPServerViewModel(string name, IMCPServerClient client)
+        {
+            Name = name;
+            _client = client;
+        }
+        
+        /// <summary>
+        /// Check if the server is available
+        /// </summary>
+        /// <returns>True if available</returns>
+        public async Task<bool> IsAvailableAsync()
+        {
+            if (_client == null) return false;
+            return await _client.IsAvailableAsync();
+        }
+        
+        /// <summary>
+        /// Start the server
+        /// </summary>
+        /// <returns>True if started</returns>
+        public async Task<bool> StartAsync()
+        {
+            if (_client == null) return false;
+            IsActive = await _client.StartServerAsync();
+            return IsActive;
+        }
+        
+        /// <summary>
+        /// Stop the server
+        /// </summary>
+        public void Stop()
+        {
+            if (_client == null) return;
+            _client.StopServer();
+            IsActive = false;
         }
     }
 }

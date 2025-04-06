@@ -18,13 +18,52 @@
                        Text="Debug Info" 
                        Style="{StaticResource HeaderText}"/>
             
-            <!-- Debug Output Area -->
-            <RichTextBox Grid.Row="1"
-                         x:Name="DebugBox"
-                         Style="{StaticResource StandardRichTextBox}"
-                         FontFamily="Consolas">
-                <FlowDocument/>
-            </RichTextBox>
+            <!-- Tab Control for Debug Views -->
+            <TabControl Grid.Row="1" Margin="0,10,0,0" x:Name="debugTabs">
+                <!-- Context Tab -->
+                <TabItem Header="Context">
+                    <RichTextBox x:Name="DebugBox"
+                                 Style="{StaticResource StandardRichTextBox}"
+                                 FontFamily="Consolas">
+                        <FlowDocument/>
+                    </RichTextBox>
+                </TabItem>
+                
+                <!-- MCP Logs Tab -->
+                <TabItem Header="MCP Logs" x:Name="mcpLogsTab">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,10">
+                            <Button 
+                                Content="Copy Logs" 
+                                Click="CopyLogs_Click"
+                                Style="{StaticResource StandardButton}"
+                                Margin="0,0,10,0"
+                                ToolTip="Copy logs to clipboard"/>
+                            <Button 
+                                Content="Save Logs" 
+                                Click="SaveLogs_Click"
+                                Style="{StaticResource StandardButton}"
+                                Margin="0,0,10,0"
+                                ToolTip="Save logs to a file"/>
+                            <Button 
+                                Content="Clear Logs" 
+                                Command="{Binding ClearLogsCommand}"
+                                Style="{StaticResource StandardButton}"
+                                ToolTip="Clear all log entries"/>
+                        </StackPanel>
+                        <ListView ItemsSource="{Binding LogEntries}"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  FontFamily="Consolas"
+                                  BorderThickness="0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
             
             <!-- Button Bar -->
             <StackPanel Grid.Row="2" 

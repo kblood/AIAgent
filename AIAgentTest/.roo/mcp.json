@@ -5,7 +5,14 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "--stdio",
+        "C:/"
+      ]
+    },
+    "Fileserver2": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
         "C:/"
       ]
     }

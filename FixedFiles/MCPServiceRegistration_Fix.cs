@@ -98,9 +98,14 @@ namespace AIAgentTest.Services.MCP
             string command = "cmd.exe";
             string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "--stdio", targetDirectory };
 
-            // Completely skip stdio client due to stability issues
-            logger?.Log("Using SimplifiedMCPClient instead of StdioMCPServerClient due to stability issues");
-            return RegisterSimplifiedMCPClient(name, "http://localhost:3000");
+            // Create the client without starting it yet
+            var mcpClient = new StdioMCPServerClient(command, args, targetDirectory, logger);
+            
+            // Register the client without starting it
+            mcpClientFactory.RegisterMCPServer(name, mcpClient);
+            logger?.Log($"Successfully registered StdioMCPServerClient for '{name}' (deferred startup)");
+            
+            return mcpClient;
         }
         
         /// <summary>
@@ -176,11 +181,7 @@ namespace AIAgentTest.Services.MCP
                 {
                     // Force UI refresh
                     logger?.Log("Refreshing server UI...");
-                    // Call Refresh command instead of private LoadServers method
-                    if (uiViewModel.RefreshServersCommand != null && uiViewModel.RefreshServersCommand.CanExecute(null))
-                    {
-                        uiViewModel.RefreshServersCommand.Execute(null);
-                    }
+                    uiViewModel.LoadServers(mcpClientFactory);
                 }
                 
                 // Register a default client if none were registered
@@ -193,9 +194,11 @@ namespace AIAgentTest.Services.MCP
                     string targetDir = Path.GetTempPath();
                     logger?.Log($"Using target directory: {targetDir}");
                     
-                    // Create and register the simplified client instead of stdio
-                    logger?.Log("Using SimplifiedMCPClient instead of StdioMCPServerClient due to potential stability issues");
-                    var mcpClient = new SimplifiedMCPClient("http://localhost:3000", logger);
+                    // Create and register the stdio client with cmd.exe wrapper
+                    string command = "cmd.exe";
+                    string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "--stdio", targetDir };
+                    
+                    var mcpClient = new StdioMCPServerClient(command, args, targetDir, logger);
                     mcpClientFactory.RegisterMCPServer("FileServer", mcpClient);
                     logger?.Log("Adding FileServer to UI manually");
                     
@@ -203,11 +206,7 @@ namespace AIAgentTest.Services.MCP
                     if (uiViewModel != null)
                     {
                         logger?.Log("Refreshing server UI after adding default server...");
-                        // Call Refresh command instead of private LoadServers method
-                        if (uiViewModel.RefreshServersCommand != null && uiViewModel.RefreshServersCommand.CanExecute(null))
-                        {
-                            uiViewModel.RefreshServersCommand.Execute(null);
-                        }
+                        uiViewModel.LoadServers(mcpClientFactory);
                     }
                 }
                 else

@@ -41,6 +41,18 @@
                             Command="{Binding RemoveServerCommand}"
                             Style="{StaticResource ActionButton}"
                             Margin="5,0"/>
+                    
+                    <Button Content="Refresh" 
+                            Command="{Binding RefreshServersCommand}"
+                            Style="{StaticResource ActionButton}"
+                            Margin="5,0"
+                            ToolTip="Refresh server status"/>
+                    
+                    <Button Content="Debug" 
+                            Command="{Binding ShowDebugCommand}"
+                            Style="{StaticResource ActionButton}"
+                            Margin="5,0"
+                            ToolTip="Show server debug logs"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -141,11 +153,28 @@
                         </StackPanel>
                         
                         <!-- Action buttons -->
-                        <Button Grid.Column="3" 
-                                Content="Test" 
-                                Command="{Binding DataContext.TestConnectionCommand, 
-                                          RelativeSource={RelativeSource AncestorType=ListView}}"
-                                Style="{StaticResource ActionButton}"/>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal">
+                            <Button Content="Test" 
+                                    Command="{Binding DataContext.TestConnectionCommand, 
+                                              RelativeSource={RelativeSource AncestorType=ListView}}"
+                                    Style="{StaticResource ActionButton}"
+                                    Margin="0,0,5,0"/>
+                            
+                            <Button Content="Start" 
+                                    Command="{Binding DataContext.StartServerCommand, 
+                                              RelativeSource={RelativeSource AncestorType=ListView}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource ActionButton}"
+                                    Margin="0,0,5,0"
+                                    Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=inverse}"/>
+                            
+                            <Button Content="Stop" 
+                                    Command="{Binding DataContext.StopServerCommand, 
+                                              RelativeSource={RelativeSource AncestorType=ListView}}"
+                                    CommandParameter="{Binding}"
+                                    Style="{StaticResource ActionButton}"
+                                    Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </StackPanel>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>

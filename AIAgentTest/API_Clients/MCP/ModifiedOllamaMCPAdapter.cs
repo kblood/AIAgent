@@ -15,7 +15,7 @@ namespace AIAgentTest.API_Clients.MCP
     /// <summary>
     /// Enhanced implementation of Ollama MCP support inspired by the ollama-mcp-bridge project
     /// </summary>
-    public class OllamaMCPAdapter : IMCPLLMClient
+    public class ModifiedOllamaMCPAdapter : IMCPLLMClient
     {
         private readonly OllamaClient _ollamaClient;
         private readonly IMessageParsingService _parsingService;
@@ -28,7 +28,7 @@ namespace AIAgentTest.API_Clients.MCP
         /// <param name="ollamaClient">The underlying Ollama client</param>
         /// <param name="parsingService">Service for parsing messages</param>
         /// <param name="toolRegistry">Registry of available tools</param>
-        public OllamaMCPAdapter(
+        public ModifiedOllamaMCPAdapter(
             OllamaClient ollamaClient, 
             IMessageParsingService parsingService,
             IToolRegistry toolRegistry)
@@ -147,44 +147,52 @@ namespace AIAgentTest.API_Clients.MCP
             // Format tools in a clear and structured way
             var toolsDescription = FormatToolDescriptions(tools);
             
-            // Prepare examples with user document path
+            // Get user documents path for examples
             string userDocsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            userDocsPath = userDocsPath.Replace("\\", "\\\\"); // Escape backslashes for JSON
+            // Double escape backslashes for the json string in the system message
+            string escapedDocsPath = userDocsPath.Replace("\\", "\\\\");
             
-            // Create a system message that instructs the model on how to use tools
-            var systemMessage = @"You are an AI assistant that can use tools to help answer questions.
-
-If you need to use a tool, respond with a JSON object like this:
-{
-  ""type"": ""get_date_time"",
-  ""tool_input"": {}
-}
-
-Notice that the tool name goes directly in the ""type"" field.
-
-For example, to get the current date and time:
-{
-  ""type"": ""get_date_time"",
-  ""tool_input"": {}
-}
-
-To read a file:
-{
-  ""type"": ""read_file"",
-  ""tool_input"": {
-    ""path"": ""C:\\path\\to\\file.txt""
-  }
-}
-
-Available tools include:
-- read_file: Read the contents of a file (parameter: path as string)
-- list_directory: List files in a directory (parameter: path as string)
-- write_file: Write content to a file (parameters: path as string, content as string)
-- get_date_time: Get the current date and time (no parameters needed)
-- list_tools: List all available tools and their descriptions (no parameters needed)
-
-If you don't need to use a tool, just respond normally with text.
-";
+            // Build a system message with dynamic user paths
+            var sb = new StringBuilder();
+            sb.AppendLine("You are an AI assistant that can use tools to help answer questions.");
+            sb.AppendLine();
+            sb.AppendLine("If you need to use a tool, respond with a JSON object like this:");
+            sb.AppendLine("{");
+            sb.AppendLine("  \"type\": \"get_date_time\",");
+            sb.AppendLine("  \"tool_input\": {}");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("Notice that the tool name goes directly in the \"type\" field.");
+            sb.AppendLine();
+            sb.AppendLine("For example, to get the current date and time:");
+            sb.AppendLine("{");
+            sb.AppendLine("  \"type\": \"get_date_time\",");
+            sb.AppendLine("  \"tool_input\": {}");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("To read a file:");
+            sb.AppendLine("{");
+            sb.AppendLine("  \"type\": \"read_file\",");
+            sb.AppendLine("  \"tool_input\": {");
+            sb.AppendLine("    \"path\": \"C:\\path\\to\\file.txt\"");
+            sb.AppendLine("  }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("Available tools include:");
+            sb.AppendLine("- read_file: Read the contents of a file (parameter: path as string)");
+            sb.AppendLine($"  Example: {{ \"type\": \"read_file\", \"tool_input\": {{ \"path\": \"{escapedDocsPath}\\\\example.txt\" }} }}");
+            sb.AppendLine("- list_directory: List files in a directory (parameter: path as string)");
+            sb.AppendLine($"  Example: {{ \"type\": \"list_directory\", \"tool_input\": {{ \"path\": \"{escapedDocsPath}\" }} }}");
+            sb.AppendLine("- write_file: Write content to a file (parameters: path as string, content as string)");
+            sb.AppendLine($"  Example: {{ \"type\": \"write_file\", \"tool_input\": {{ \"path\": \"{escapedDocsPath}\\\\newfile.txt\", \"content\": \"Hello world\" }} }}");
+            sb.AppendLine("- get_date_time: Get the current date and time (no parameters needed)");
+            sb.AppendLine("  Example: { \"type\": \"get_date_time\", \"tool_input\": {} }");
+            sb.AppendLine("- list_tools: List all available tools and their descriptions (no parameters needed)");
+            sb.AppendLine("  Example: { \"type\": \"list_tools\", \"tool_input\": {} }");
+            sb.AppendLine();
+            sb.AppendLine("If you don't need to use a tool, just respond normally with text.");
+            
+            var systemMessage = sb.ToString();
             
             // Combine messages into a full prompt with lower temperature
             var fullPrompt = $"{systemMessage}\n\nAvailable tools:\n{toolsDescription}\n\nUser: {prompt}\n\nAssistant: ";
@@ -618,32 +626,16 @@ Please respond based on this context and the current query.";
         /// </summary>
         public async Task<object> ExecuteToolAsync(string toolName, Dictionary<string, object> parameters, string serverName = null)
         {
-            Console.WriteLine($"Executing tool '{toolName}' on server '{serverName ?? "local"}'");
-            
             // If a server name is provided, route to that server
             if (!string.IsNullOrEmpty(serverName) && _serverClients.TryGetValue(serverName, out var serverClient))
             {
-                Console.WriteLine($"[MCP] Executing tool '{toolName}' on server '{serverName}'");
                 return await serverClient.ExecuteToolAsync(toolName, parameters);
-            }
-            
-            // Check if this is a filesystem tool and we have a FileServer client
-            var isFileSystemTool = new[] { "read_file", "write_file", "list_directory", "directory_tree", 
-                                          "create_directory", "move_file", "search_files", "get_file_info", 
-                                          "list_allowed_directories", "read_multiple_files", "edit_file" }
-                                        .Contains(toolName);
-                                        
-            if (isFileSystemTool && _serverClients.TryGetValue("FileServer", out var fileServerClient))
-            {
-                Console.WriteLine($"[MCP] Executing tool '{toolName}' on FileServer");
-                return await fileServerClient.ExecuteToolAsync(toolName, parameters);
             }
             
             // Otherwise use the local tool registry
             var handler = _toolRegistry.GetToolHandler(toolName);
             if (handler != null)
             {
-                Console.WriteLine($"[MCP] Executing tool '{toolName}' using local handler");
                 return await handler(parameters);
             }
             
