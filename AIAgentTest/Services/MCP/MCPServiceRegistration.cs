@@ -4,6 +4,7 @@ using AIAgentTest.Services.Interfaces;
 using System.Threading.Tasks;
 using System;
 using System.IO;
+using AIAgentTest.ViewModels;
 
 namespace AIAgentTest.Services.MCP
 {
@@ -157,11 +158,11 @@ namespace AIAgentTest.Services.MCP
             logger?.Log("Registering common tools...");
             var commonTools = new CommonTools();
             ServiceProvider.RegisterService<CommonTools>(commonTools);
-            
+
             // Register tools with the registry
             logger?.Log("Registering tools with registry...");
             commonTools.RegisterCommonTools(toolRegistry);
-            
+
             // Register MCP servers and properly await
             logger?.Log("Registering MCP servers...");
             try 
@@ -169,7 +170,13 @@ namespace AIAgentTest.Services.MCP
                 // First use RegisterMCPServers with skipStartup=true to defer startup
                 var registeredServers = await MCPServerRegistration.RegisterMCPServersAsync(mcpClientFactory, logger, true);
                 logger?.Log("MCP server registration completed.");
-                
+
+                logger?.Log("Registering MCPServerManagerViewModel...");
+                // Assuming it needs the factory and maybe the logger:
+                var uiViewModelInstance = new ViewModels.MCPServerManagerViewModel(mcpClientFactory);
+                ServiceProvider.RegisterService<ViewModels.MCPServerManagerViewModel>(uiViewModelInstance);
+                logger?.Log("MCPServerManagerViewModel registered.");
+
                 // Populate UI with servers regardless of whether they can be started
                 var uiViewModel = ServiceProvider.GetService<ViewModels.MCPServerManagerViewModel>();
                 if (uiViewModel != null)
