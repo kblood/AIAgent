@@ -303,7 +303,7 @@ namespace AIAgentTest.ViewModels
         /// <summary>
         /// Removes the selected server
         /// </summary>
-        private void RemoveServer(bool confirmDelete = true)
+        private async void RemoveServer(bool confirmDelete = true)
         {
             if (SelectedServer == null) return;
             
@@ -320,17 +320,33 @@ namespace AIAgentTest.ViewModels
                     }
                 }
                 
+                string serverName = SelectedServer.Name;
+                Debug.WriteLine($"Removing server: {serverName}");
+                
                 // Stop the server if it's running
                 if (SelectedServer.IsRunning)
                 {
-                    StopServer(SelectedServer);
+                    Debug.WriteLine($"Stopping server '{serverName}' before removal");
+                    SelectedServer.ServerClient?.StopServer();
                 }
                 
-                // Remove the server from the UI
+                // Use our new method for proper cleanup
+                bool removed = await _mcpClientFactory.RemoveMCPServerAsync(serverName);
+                
+                if (removed)
+                {
+                    Debug.WriteLine($"Successfully removed server '{serverName}' from MCPClientFactory");
+                }
+                else
+                {
+                    Debug.WriteLine($"Failed to remove server '{serverName}' from MCPClientFactory - may not have been registered");
+                }
+                
+                // Remove from the UI collection regardless
                 Servers.Remove(SelectedServer);
+                Debug.WriteLine($"Removed server '{serverName}' from UI");
                 
                 // Save the MCP server configuration
-                Debug.WriteLine($"Removed server: {SelectedServer.Name}");
                 SelectedServer = null;
                 
                 // Save servers to configuration
@@ -339,6 +355,7 @@ namespace AIAgentTest.ViewModels
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error removing server: {ex.Message}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 MessageBox.Show($"Error removing server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

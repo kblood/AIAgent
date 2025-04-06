@@ -145,7 +145,7 @@ namespace AIAgentTest.Services.MCP
             // Register the MCP client factory
             logger?.Log("Registering MCP client factory...");
             var llmClientFactory = new LLMClientFactory();
-            var messageParsingService = ServiceProvider.GetService<IMessageParsingService>();
+            var messageParsingService = ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IMessageParsingService>();
             var mcpClientFactory = new MCPClientFactory(llmClientFactory, messageParsingService, toolRegistry);
             ServiceProvider.RegisterService<MCPClientFactory>(mcpClientFactory);
             

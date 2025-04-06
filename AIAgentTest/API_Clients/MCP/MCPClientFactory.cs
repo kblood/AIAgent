@@ -99,6 +99,98 @@ namespace AIAgentTest.API_Clients.MCP
         }
         
         /// <summary>
+        /// Removes an MCP server from the factory and cleans up resources
+        /// </summary>
+        /// <param name="serverName">Name of the server to remove</param>
+        /// <returns>True if server was found and removed</returns>
+        public async Task<bool> RemoveMCPServerAsync(string serverName)
+        {
+            System.Diagnostics.Debug.WriteLine($"Removing MCP server '{serverName}'...");
+            
+            if (_serverClients.TryGetValue(serverName, out var server))
+            {
+                try
+                {
+                    // First, unregister any tools associated with this server
+                    if (_toolRegistry != null)
+                    {
+                        var allTools = _toolRegistry.GetAllTools().ToList();
+                        foreach (var tool in allTools)
+                        {
+                            // Check if this tool belongs to the server we're removing
+                            bool isServerTool = false;
+                            if (tool.Metadata != null && 
+                                tool.Metadata.TryGetValue("server_name", out var toolServer) && 
+                                toolServer.ToString().Equals(serverName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                isServerTool = true;
+                            }
+                            
+                            if (isServerTool)
+                            {
+                                // Disable the tool first (this will stop it from being used)
+                                _toolRegistry.DisableTool(tool.Name);
+                                System.Diagnostics.Debug.WriteLine($"Disabled tool '{tool.Name}' from server '{serverName}'");
+                                
+                                // We would ideally remove the tool completely, but the interface doesn't 
+                                // have a method for that, so disabling is the best we can do
+                            }
+                        }
+                    }
+                    
+                    // Then, stop the server
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Stopping server '{serverName}'...");
+                        server.StopServer();
+                        System.Diagnostics.Debug.WriteLine($"Server '{serverName}' stopped successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error stopping server '{serverName}': {ex.Message}");
+                        // Continue with removal even if stop fails
+                    }
+                    
+                    // Finally, dispose the server if it's disposable
+                    try
+                    {
+                        if (server is IDisposable disposable)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Disposing server '{serverName}'...");
+                            disposable.Dispose();
+                            System.Diagnostics.Debug.WriteLine($"Server '{serverName}' disposed");
+                        }
+                        else if (server is IAsyncDisposable asyncDisposable)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Async disposing server '{serverName}'...");
+                            await asyncDisposable.DisposeAsync();
+                            System.Diagnostics.Debug.WriteLine($"Server '{serverName}' async disposed");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error disposing server '{serverName}': {ex.Message}");
+                        // Continue with removal even if dispose fails
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error during cleanup for server '{serverName}': {ex.Message}");
+                    // Continue with removal even if cleanup fails
+                }
+                
+                // Remove the server from our dictionary
+                _serverClients.Remove(serverName);
+                System.Diagnostics.Debug.WriteLine($"Server '{serverName}' removed from registry");
+                
+                return true;
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"Server '{serverName}' not found in registry");
+            return false;
+        }
+        
+        /// <summary>
         /// Registers an MCP server with the factory
         /// </summary>
         /// <param name="serverName">Name of the server</param>
@@ -113,48 +205,171 @@ namespace AIAgentTest.API_Clients.MCP
             if (loadToolsImmediately)
             {
                 // Fire and forget - we don't want to block the registration process
+                // Using Task.Run to avoid thread blocking in the UI
                 Task.Run(async () =>
                 {
                     try
                     {
-                        // Try to start the server and get tools
-                        var isAvailable = await serverClient.IsAvailableAsync();
-                        if (!isAvailable)
+                        // Log what we're doing
+                        System.Diagnostics.Debug.WriteLine($"Preloading tools for server '{serverName}'...");
+                        
+                        // Try to start the server if needed
+                        bool isAvailable = false;
+                        try
                         {
-                            await serverClient.StartServerAsync();
+                            isAvailable = await serverClient.IsAvailableAsync();
+                            System.Diagnostics.Debug.WriteLine($"Server '{serverName}' is available: {isAvailable}");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error checking if server '{serverName}' is available: {ex.Message}");
                         }
                         
-                        // Get tools from the server
-                        var tools = await serverClient.GetToolsAsync();
+                        if (!isAvailable)
+                        {
+                            try
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Starting server '{serverName}'...");
+                                isAvailable = await serverClient.StartServerAsync();
+                                System.Diagnostics.Debug.WriteLine($"Started server '{serverName}': {isAvailable}");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error starting server '{serverName}': {ex.Message}");
+                            }
+                        }
                         
-                        // Register tools if we have a registry
+                        // Get tools from the server with a timeout
+                        List<Services.MCP.ToolDefinition> tools = null;
+                        try
+                        {
+                            // Use a cancellation token with a reasonable timeout
+                            var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+                            var getToolsTask = serverClient.GetToolsAsync();
+                            
+                            // Wait for the task to complete or timeout
+                            await Task.WhenAny(
+                                getToolsTask, 
+                                Task.Delay(30000, cts.Token));
+                                
+                            if (getToolsTask.IsCompleted)
+                            {
+                                cts.Cancel(); // Cancel the delay task
+                                tools = await getToolsTask; // Get the result
+                                System.Diagnostics.Debug.WriteLine($"Retrieved {tools?.Count ?? 0} tools from server '{serverName}'");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Timed out waiting for tools from server '{serverName}'");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error getting tools from server '{serverName}': {ex.Message}");
+                        }
+                        
+                        // Register tools if we got them and have a registry
                         if (_toolRegistry != null && tools != null && tools.Count > 0)
                         {
+                            int registeredCount = 0;
                             foreach (var tool in tools)
                             {
-                                // Add server metadata if missing
-                                if (tool.Metadata == null)
+                                try
                                 {
-                                    tool.Metadata = new Dictionary<string, object>();
+                                    // Skip null tools
+                                    if (tool == null)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"Skipping null tool from server '{serverName}'");
+                                        continue;
+                                    }
+                                    
+                                    // Skip tools with no name
+                                    if (string.IsNullOrEmpty(tool.Name))
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"Skipping tool with no name from server '{serverName}'");
+                                        continue;
+                                    }
+                                    
+                                    // Add server metadata if missing
+                                    if (tool.Metadata == null)
+                                    {
+                                        tool.Metadata = new Dictionary<string, object>();
+                                    }
+                                    
+                                    if (!tool.Metadata.ContainsKey("server_name"))
+                                    {
+                                        tool.Metadata["server_name"] = serverName;
+                                    }
+                                    
+                                    // Add server type if missing
+                                    if (!tool.Metadata.ContainsKey("server_type"))
+                                    {
+                                        tool.Metadata["server_type"] = "filesystem";
+                                    }
+                                    
+                                    // Register tool with handler that delegates to the server
+                                    try
+                                    {
+                                        // Create the tool handler closure with a reference to the server
+                                        // This is critical for tools to work properly
+                                        var currentServer = serverClient; // Capture the current server in the closure
+                                        var currentToolName = tool.Name; // Capture the current tool name in the closure
+                                        
+                                        // Ensure unique wrapper for delegates
+                                        var toolHandler = new Func<object, Task<object>>(async (input) =>
+                                        {
+                                            try
+                                            {
+                                                // Log the execution
+                                                System.Diagnostics.Debug.WriteLine($"Executing tool '{currentToolName}' from server '{serverName}'...");
+                                                
+                                                // Execute the tool, relying on the server's error handling
+                                                var result = await currentServer.ExecuteToolAsync(currentToolName, input);
+                                                
+                                                // Log the success
+                                                System.Diagnostics.Debug.WriteLine($"Successfully executed tool '{currentToolName}' from server '{serverName}'");
+                                                
+                                                return result;
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                // Log the error
+                                                System.Diagnostics.Debug.WriteLine($"Error executing tool '{currentToolName}' from server '{serverName}': {ex.Message}");
+                                                
+                                                // Return a structured error object
+                                                return new { error = $"Error executing tool '{currentToolName}': {ex.Message}" };
+                                            }
+                                        });
+                                        
+                                        // Register the tool with our handler
+                                        _toolRegistry.RegisterTool(tool, toolHandler);
+                                        registeredCount++;
+                                        
+                                        System.Diagnostics.Debug.WriteLine($"Registered tool '{tool.Name}' from server '{serverName}'");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"Error registering tool '{tool.Name}' from server '{serverName}': {ex.Message}");
+                                    }
                                 }
-                                
-                                if (!tool.Metadata.ContainsKey("server_name"))
+                                catch (Exception toolEx)
                                 {
-                                    tool.Metadata["server_name"] = serverName;
+                                    System.Diagnostics.Debug.WriteLine($"Error processing tool from server '{serverName}': {toolEx.Message}");
                                 }
-                                
-                                // Register tool with handler that delegates to the server
-                                _toolRegistry.RegisterTool(tool, async (input) =>
-                                {
-                                    return await serverClient.ExecuteToolAsync(tool.Name, input);
-                                });
                             }
+                            
+                            System.Diagnostics.Debug.WriteLine($"Successfully registered {registeredCount}/{tools.Count} tools from server '{serverName}'");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"No tools available from server '{serverName}' or no tool registry available");
                         }
                     }
                     catch (Exception ex)
                     {
                         // Log but don't fail - this is just preloading
                         System.Diagnostics.Debug.WriteLine($"Error preloading tools for server '{serverName}': {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                     }
                 });
             }

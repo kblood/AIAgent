@@ -255,36 +255,82 @@ namespace AIAgentTest.API_Clients.MCP
         // Stop the server
         public async Task StopServerAsync()
         {
-            if (_serverProcess == null) return;
-
+            _logger?.Log("[Stdio] StopServerAsync called");
+            
+            // First, clear any pending requests
             foreach (var kvp in _pendingRequests)
-            {
-                kvp.Value.TrySetCanceled();
-            }
-            _pendingRequests.Clear();
-
-            try { _stdinWriter?.Close(); } catch { }
-
-            if (_serverProcess != null && !_serverProcess.HasExited)
             {
                 try
                 {
-                    _serverProcess.Kill(entireProcessTree: true);
-                    
-                    // Create a cancellation token that cancels after 5 seconds
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await _serverProcess.WaitForExitAsync(cts.Token);
+                    kvp.Value.TrySetCanceled();
                 }
                 catch (Exception ex)
                 {
-                    _logger?.Log($"Error killing process: {ex.Message}");
+                    _logger?.Log($"[Stdio] Error canceling pending request: {ex.Message}");
+                }
+            }
+            _pendingRequests.Clear();
+
+            // Then try to close the writer
+            if (_stdinWriter != null)
+            {
+                try 
+                { 
+                    _stdinWriter.Close(); 
+                    _stdinWriter = null;
+                } 
+                catch (Exception ex) 
+                { 
+                    _logger?.Log($"[Stdio] Error closing stdin writer: {ex.Message}"); 
                 }
             }
 
-            _serverProcess?.Dispose();
-            _serverProcess = null;
-            _stdinWriter = null;
+            // Finally, kill the process if it's still running
+            if (_serverProcess != null)
+            {
+                try
+                {
+                    if (!_serverProcess.HasExited)
+                    {
+                        _logger?.Log("[Stdio] Killing server process");
+                        _serverProcess.Kill(entireProcessTree: true);
+                        
+                        try
+                        {
+                            // Create a cancellation token that cancels after 5 seconds
+                            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                            await _serverProcess.WaitForExitAsync(cts.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            _logger?.Log("[Stdio] Timed out waiting for process to exit");
+                        }
+                    }
+                    else
+                    {
+                        _logger?.Log("[Stdio] Process already exited");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Log($"[Stdio] Error killing process: {ex.Message}");
+                }
+                finally
+                {
+                    try
+                    {
+                        _serverProcess.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Log($"[Stdio] Error disposing process: {ex.Message}");
+                    }
+                    _serverProcess = null;
+                }
+            }
+
             _isStarted = false;
+            _logger?.Log("[Stdio] Server stopped");
         }
 
         /// <summary>
@@ -457,39 +503,106 @@ namespace AIAgentTest.API_Clients.MCP
         /// </summary>
         public async Task<object> ExecuteToolAsync(string toolName, object input)
         {
+            _logger?.Log($"[Stdio] ExecuteToolAsync called for tool: {toolName}");
+            
             if (string.IsNullOrEmpty(toolName))
                 throw new ArgumentNullException(nameof(toolName));
             
+            // Make sure the server is started
             if (!_isStarted)
             {
+                _logger?.Log("[Stdio] Server not started, attempting to start...");
                 try
                 {
                     bool started = await StartServerAsync();
                     if (!started)
                     {
+                        _logger?.Log("[Stdio] Failed to start server for tool execution");
                         return new { error = "MCP server could not be started" };
                     }
                 }
                 catch (Exception ex)
                 {
+                    _logger?.Log($"[Stdio] Error starting server for tool execution: {ex.Message}");
                     return new { error = $"Failed to start MCP server: {ex.Message}" };
                 }
             }
             
+            // Make sure we're connected
+            if (!IsConnected)
+            {
+                _logger?.Log("[Stdio] Server is not connected, attempting reconnection...");
+                try
+                {
+                    bool started = await StartServerAsync();
+                    if (!started || !IsConnected)
+                    {
+                        _logger?.Log("[Stdio] Failed to reconnect to server");
+                        return new { error = "Server connection could not be established" };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Log($"[Stdio] Error reconnecting to server: {ex.Message}");
+                    return new { error = $"Failed to reconnect to server: {ex.Message}" };
+                }
+            }
+            
+            // Now try to execute the tool
             try
             {
-                // Ensure we have valid streams
-                if (!IsConnected)
+                _logger?.Log($"[Stdio] Executing tool '{toolName}' with input: {JsonSerializer.Serialize(input)}");
+                
+                // Validate input format
+                var validatedInput = PrepareToolInput(toolName, input);
+                if (validatedInput is Dictionary<string, object> error && error.ContainsKey("error"))
                 {
-                    return new { error = "Server connection is not established" };
+                    return error;
                 }
                 
-                var response = await SendRequestAsync<JsonElement>(toolName, input);
+                // Send the request to the server
+                var response = await SendRequestAsync<JsonElement>(toolName, validatedInput);
+                _logger?.Log($"[Stdio] Tool execution response: {response.GetRawText()}");
+                
                 return JsonSerializer.Deserialize<object>(response.GetRawText(), _jsonOptions);
             }
             catch (Exception ex)
             {
-                return new { error = ex.Message };
+                _logger?.Log($"[Stdio] Error executing tool '{toolName}': {ex.Message}");
+                _logger?.Log($"[Stdio] Exception details: {ex}");
+                return new { error = $"Error executing tool: {ex.Message}" };
+            }
+        }
+        
+        /// <summary>
+        /// Prepares and validates tool input
+        /// </summary>
+        private object PrepareToolInput(string toolName, object input)
+        {
+            try
+            {
+                // If input is already a dictionary, use it directly
+                if (input is Dictionary<string, object> dictInput)
+                {
+                    return dictInput;
+                }
+                
+                // If input is a JsonElement, deserialize it
+                if (input is JsonElement jsonElement)
+                {
+                    var deserialized = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonElement.GetRawText());
+                    return deserialized;
+                }
+                
+                // Otherwise serialize and deserialize to ensure proper format
+                string jsonString = JsonSerializer.Serialize(input);
+                var result = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger?.Log($"[Stdio] Error preparing input for tool '{toolName}': {ex.Message}");
+                return new Dictionary<string, object> { { "error", $"Invalid input format: {ex.Message}" } };
             }
         }
         
