@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using AIAgentTest.Common;
 
@@ -13,13 +14,22 @@ namespace AIAgentTest.Services.MCP
         /// <summary>
         /// Name of the tool
         /// </summary>
+        [JsonPropertyName("name")] 
         public string Name { get; set; }
-        
+
         /// <summary>
         /// Description of the tool
         /// </summary>
+        [JsonPropertyName("description")]
         public string Description { get; set; }
-        
+
+        // --- NEW Property to capture the raw schema ---
+        /// <summary>
+        /// Holds the raw JSON schema object received from the server's 'inputSchema' field.
+        /// Processed after deserialization to populate compatible fields.
+        /// </summary>
+        [JsonPropertyName("inputSchema")] // Map JSON 'inputSchema' to this
+        public JsonElement RawInputSchema { get; set; } // Use JsonElement to hold arbitrary JSON
         /// <summary>
         /// Tool schema in JSON format
         /// </summary>
@@ -54,6 +64,64 @@ namespace AIAgentTest.Services.MCP
         /// Additional metadata
         /// </summary>
         public Dictionary<string, object> Metadata { get; set; }
+
+        /// <summary>
+        /// Processes the RawInputSchema (received from JSON) to populate
+        /// the compatibility fields (Input dictionary, Schema string).
+        /// Should be called after the ToolDefinition object is deserialized.
+        /// </summary>
+        public void ProcessRawInputSchema()
+        {
+            // Ensure Input dictionary exists
+            Input ??= new Dictionary<string, object>();
+            Input.Clear(); // Clear any potential defaults
+
+            // Check if RawInputSchema has been populated and is an object
+            if (RawInputSchema.ValueKind == JsonValueKind.Object)
+            {
+                // 1. Populate the Schema string (for compatibility if needed)
+                try
+                {
+                    // Pretty print for readability if stored/displayed
+                    Schema = JsonSerializer.Serialize(RawInputSchema, new JsonSerializerOptions { WriteIndented = true });
+                }
+                catch
+                {
+                    Schema = RawInputSchema.GetRawText(); // Fallback to raw text
+                }
+
+                // 2. Populate the Input dictionary (Simplified Representation)
+                if (RawInputSchema.TryGetProperty("properties", out var propertiesElement) && propertiesElement.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in propertiesElement.EnumerateObject())
+                    {
+                        string propertyName = property.Name;
+                        JsonElement propertySchema = property.Value.Clone(); // Clone element
+
+                        // Store the schema definition (JsonElement) for the property in the Input dict
+                        // Code using the Input dict will need to handle this JsonElement.
+                        // Alternative: Store just the type string if simpler compatibility is needed:
+                        // if (propertySchema.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String)
+                        // {
+                        //     Input[propertyName] = typeElement.GetString();
+                        // } else { Input[propertyName] = propertySchema; }
+
+                        Input[propertyName] = propertySchema;
+                    }
+                }
+                // else: Schema has no 'properties' object. Input dictionary remains empty.
+
+                // Optionally: You could also try and populate 'Parameters' here if you
+                // can map the JsonSchema structure to your MCPParameterDefinition structure,
+                // but it might be complex.
+            }
+            else
+            {
+                // RawInputSchema was not populated or was not a JSON object.
+                Schema = null; // Clear schema string
+                // Input dictionary remains empty.
+            }
+        }
     }
     
     /// <summary>

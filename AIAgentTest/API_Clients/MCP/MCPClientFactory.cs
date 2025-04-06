@@ -250,9 +250,10 @@ namespace AIAgentTest.API_Clients.MCP
                             // Wait for the task to complete or timeout
                             await Task.WhenAny(
                                 getToolsTask, 
-                                Task.Delay(30000, cts.Token));
-                                
-                            if (getToolsTask.IsCompleted)
+                                Task.Delay(3000, cts.Token));
+                                //Task.Delay(30000, cts.Token));
+
+                if (getToolsTask.IsCompleted)
                             {
                                 cts.Cancel(); // Cancel the delay task
                                 tools = await getToolsTask; // Get the result

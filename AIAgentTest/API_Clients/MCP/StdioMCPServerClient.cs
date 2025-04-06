@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -58,36 +59,70 @@ namespace AIAgentTest.API_Clients.MCP
             _stdinWriter != null && 
             _serverProcess.StandardInput != null && 
             _serverProcess.StandardInput.BaseStream != null;
-        
+
         /// <summary>
-        /// Start the server process
+        /// Start the server process directly without using cmd.exe,
+        /// first finding the full path to the executable.
         /// </summary>
         public async Task<bool> StartServerAsync()
         {
             if (IsConnected)
+            {
+                _logger?.Log("[Stdio] StartServerAsync called, but server appears to be already connected.");
                 return true;
+            }
+            if (_serverProcess != null)
+            {
+                _logger?.Log("[Stdio] Warning: Found existing _serverProcess instance before starting. Attempting cleanup.");
+                await StopServerAsync();
+            }
+
+            // Combine external token with a timeout for the entire startup process
+            using var overallTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // e.g., 30 seconds total timeout
+            CancellationToken cancellationToken = default;
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, overallTimeoutCts.Token);
+            var effectiveToken = linkedCts.Token;
 
             try
             {
-                // Use a reliable system directory instead of a potentially inaccessible one
-                string workDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
-                
-                // Fallbacks if needed
-                if (string.IsNullOrEmpty(workDir) || !Directory.Exists(workDir))
+                // --- Find Full Path to Executable ---
+                // On Windows, npx is usually npx.cmd. Use the _command field passed in,
+                // but default to "npx.cmd" on Windows if just "npx" was provided.
+                string executableToFind = _command;
+                if (OperatingSystem.IsWindows() &&
+                    !_command.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) &&
+                    !_command.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) // Basic check
                 {
-                    workDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+                    executableToFind = _command + ".cmd"; // Assume .cmd for npx on Windows
+                    _logger?.Log($"[Stdio] Adjusted command to search for '{executableToFind}' on Windows.");
                 }
-                if (string.IsNullOrEmpty(workDir) || !Directory.Exists(workDir))
+
+                string? fullPathToExecutable = FindExecutableInPath(executableToFind);
+
+                if (string.IsNullOrEmpty(fullPathToExecutable))
                 {
-                    workDir = Path.GetTempPath();
+                    _logger?.Log($"[Stdio] Error: Could not find executable '{executableToFind}' in PATH environment variable.");
+                    return false; // Cannot proceed without the executable path
                 }
-                
-                // Use command shell to help find the command
+                _logger?.Log($"[Stdio] Found executable at: '{fullPathToExecutable}'");
+                // --- End Find Full Path ---
+
+                // Determine effective working directory
+                string effectiveWorkingDirectory = _workingDirectory ?? string.Empty;
+                _logger?.Log($"[Stdio] Effective working directory for process: '{(string.IsNullOrEmpty(effectiveWorkingDirectory) ? "[Inherited]" : effectiveWorkingDirectory)}'");
+                // ** Note on 'C:/' mentioned in your error **
+                // If _workingDirectory was null/empty, it inherits. If your C# app runs from C:\, that's used.
+                // If _workingDirectory was explicitly set to "C:/", that's used. Running from C:\ root might cause
+                // permission issues later, even if the process starts. Consider if a different working directory is more appropriate.
+
+
                 var startInfo = new ProcessStartInfo
                 {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c {_command} {string.Join(" ", _arguments)}",
-                    WorkingDirectory = workDir,
+                    // *** Use the full path found ***
+                    FileName = fullPathToExecutable,
+
+                    Arguments = string.Join(" ", _arguments.Select(arg => QuoteArgumentIfNeeded(arg))),
+                    WorkingDirectory = effectiveWorkingDirectory,
                     RedirectStandardInput = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -96,34 +131,43 @@ namespace AIAgentTest.API_Clients.MCP
                     StandardOutputEncoding = Encoding.UTF8,
                     StandardErrorEncoding = Encoding.UTF8,
                 };
-                
-                _logger?.Log($"Starting process with cmd.exe /c {_command} {string.Join(" ", _arguments)}");
-                _logger?.Log($"Using working directory: {workDir}");
+
+                _logger?.Log($"[Stdio] Starting process directly: '{startInfo.FileName}'");
+                _logger?.Log($"[Stdio] Arguments: {startInfo.Arguments}");
+                // ... (Logging for working directory as before) ...
 
                 _serverProcess = new Process { StartInfo = startInfo };
                 _serverProcess.EnableRaisingEvents = true;
-
                 _serverProcess.OutputDataReceived += OnOutputDataReceived;
                 _serverProcess.ErrorDataReceived += OnErrorDataReceived;
                 _serverProcess.Exited += OnProcessExited;
 
                 if (!_serverProcess.Start())
                 {
-                    _logger?.Log("Failed to start process");
+                    _logger?.Log("[Stdio] Process.Start() returned false. Failed to start process.");
+                    _serverProcess.Dispose();
+                    _serverProcess = null;
                     return false;
                 }
 
-                // Initialize the StandardInput writer with null check
-                if (_serverProcess.StandardInput != null && _serverProcess.StandardInput.BaseStream != null)
+                _logger?.Log($"[Stdio] Process started successfully (PID: {_serverProcess.Id}). Initializing streams...");
+
+                // Initialize streams (added slight delay and CanWrite check)
+                await Task.Delay(100);
+                if (_serverProcess != null && !_serverProcess.HasExited &&
+                    _serverProcess.StandardInput != null && _serverProcess.StandardInput.BaseStream != null &&
+                    _serverProcess.StandardInput.BaseStream.CanWrite)
                 {
                     _stdinWriter = new StreamWriter(_serverProcess.StandardInput.BaseStream, Encoding.UTF8)
                     {
-                        AutoFlush = true
+                        AutoFlush = true,
+                        NewLine = "\n" // Use \n for Node.js
                     };
+                    _logger?.Log("[Stdio] StandardInput writer initialized.");
                 }
                 else
                 {
-                    _logger?.Log("Error: StandardInput or its BaseStream is null");
+                    _logger?.Log("[Stdio] Error: StandardInput stream is null, not writable, or process exited after stream check.");
                     await StopServerAsync();
                     return false;
                 }
@@ -131,31 +175,202 @@ namespace AIAgentTest.API_Clients.MCP
                 _serverProcess.BeginOutputReadLine();
                 _serverProcess.BeginErrorReadLine();
 
-                _logger?.Log("MCP server in stdio mode detected, waiting to ensure it's ready");
-                
-                // Wait a bit to make sure the process is fully started
-                await Task.Delay(3000);
-                
-                if (_serverProcess.HasExited)
+                _logger?.Log("[Stdio] Began reading stdout/stderr. Waiting for server readiness...");
+
+                // --- ACTIVE READINESS CHECK ---
+                int maxRetries = 10; // Max attempts for readiness check
+                int retryDelayMs = 500; // Delay between retries
+                bool isReady = false;
+
+                for (int i = 0; i < maxRetries; i++)
                 {
-                    _logger?.Log("Server process exited prematurely");
+                    effectiveToken.ThrowIfCancellationRequested(); // Check for cancellation/timeout
+
+                    if (_serverProcess == null || _serverProcess.HasExited)
+                    {
+                        _logger?.Log("[Stdio] Server process exited during readiness check loop.");
+                        isReady = false;
+                        break; // Exit loop
+                    }
+
+                    _logger?.Log($"[Stdio] Readiness check attempt {i + 1}/{maxRetries}: Sending 'tools/list'...");
+
+                    // Use SendRequestAsync internally for the check, but with a shorter timeout
+                    using var attemptTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // 5-second timeout per attempt
+                    using var linkedAttemptCts = CancellationTokenSource.CreateLinkedTokenSource(effectiveToken, attemptTimeoutCts.Token);
+                    try
+                    {
+                        
+
+                        // Send tools/list. We don't deeply care about the result type here, just if it succeeds without RPC error.
+                        // Use object or JsonElement as TResponse.
+                        await SendRequestAsync<JsonElement>("tools/list", null, linkedAttemptCts.Token);
+
+                        // If SendRequestAsync completes without throwing an exception (esp. McpErrorException for RPC errors), we're ready
+                        _logger?.Log("[Stdio] Readiness check successful ('tools/list' responded).");
+                        isReady = true;
+                        break; // Exit loop, server is ready
+                    }
+                    // --- Catch specific JSON-RPC errors ---
+                    // NOTE: This requires SendRequestAsync/OnOutputDataReceived to throw McpErrorException
+                    //catch (McpErrorException mcpEx)
+                    //{
+                    //    _logger?.Log($"[Stdio] Readiness check failed (MCP Error {mcpEx.RpcError.Code}): {mcpEx.RpcError.Message}. Retrying after delay...");
+                    //    // Optionally check for specific codes if needed, but any RPC error likely means not ready
+                    //}
+                    // --- Catch timeouts for this specific attempt ---
+                    catch (OperationCanceledException) when (attemptTimeoutCts.IsCancellationRequested) // Check if it was OUR timeout
+                    {
+                        _logger?.Log("[Stdio] Readiness check attempt timed out. Retrying after delay...");
+                    }
+                    // --- Catch other potential communication errors ---
+                    catch (IOException ioEx) // e.g., pipe broken if process died between checks
+                    {
+                        _logger?.Log($"[Stdio] Readiness check failed (IO Error): {ioEx.Message}. Retrying after delay...");
+                    }
+                    catch (InvalidOperationException invOpEx) // e.g., stream closed
+                    {
+                        _logger?.Log($"[Stdio] Readiness check failed (Invalid Operation): {invOpEx.Message}. Retrying after delay...");
+                    }
+                    // --- Catch unexpected errors during readiness check ---
+                    catch (Exception ex)
+                    {
+                        _logger?.Log($"[Stdio] Readiness check failed (Unexpected Error): {ex.Message}. Retrying after delay...");
+                        // Consider breaking loop on unexpected errors? Or log and retry?
+                    }
+
+                    // Wait before next retry, respecting cancellation
+                    await Task.Delay(retryDelayMs, effectiveToken);
+                }
+                // --- END ACTIVE READINESS CHECK ---
+
+
+                if (!isReady)
+                {
+                    _logger?.Log("[Stdio] Server failed readiness check after multiple retries or process exited.");
+                    await StopServerAsync(); // Clean up the failed server
                     return false;
                 }
-                
+
+                if (_serverProcess == null || _serverProcess.HasExited)
+                {
+                    _logger?.Log("[Stdio] Server process exited prematurely during readiness wait.");
+                    _isStarted = false;
+                    _stdinWriter?.Dispose();
+                    _stdinWriter = null;
+                    return false;
+                }
+
                 _isStarted = true;
-                _logger?.Log("MCP server started successfully in stdio mode");
-                
+                _logger?.Log("[Stdio] MCP server assumed ready after delay.");
                 return true;
+            }
+            catch (Win32Exception w32Ex) // Catch specific process start errors
+            {
+                _logger?.Log($"[Stdio] Error starting process (Win32Exception): {w32Ex.Message} (Code: {w32Ex.NativeErrorCode})");
+                //_logger?.Log($"[Stdio] FileName='{w32Ex.Source}', WorkingDirectory='{effectiveWorkingDirectory}'"); // Log context
+                _logger?.Log($"[Stdio] Stack trace: {w32Ex.StackTrace}");
+                await StopServerAsync();
+                return false;
+            }
+            catch (InvalidOperationException ioEx)
+            {
+                _logger?.Log($"[Stdio] Error starting or interacting with process (InvalidOperationException): {ioEx.Message}");
+                _logger?.Log($"[Stdio] Stack trace: {ioEx.StackTrace}");
+                await StopServerAsync();
+                return false;
             }
             catch (Exception ex)
             {
-                _logger?.Log($"Error starting server: {ex.Message}");
-                _logger?.Log($"Stack trace: {ex.StackTrace}");
+                _logger?.Log($"[Stdio] Unexpected error starting server: {ex.Message}");
+                _logger?.Log($"[Stdio] Stack trace: {ex.StackTrace}");
                 await StopServerAsync();
                 return false;
             }
         }
-        
+
+        /// <summary>
+        /// Helper method to find an executable file within directories specified in the PATH environment variable.
+        /// </summary>
+        /// <param name="executableName">The name of the executable (e.g., "npx.cmd", "node.exe")</param>
+        /// <returns>The full path to the executable if found; otherwise, null.</returns>
+        private string? FindExecutableInPath(string executableName)
+        {
+            if (File.Exists(executableName)) // Check if it's already a full path or in the current dir
+            {
+                return Path.GetFullPath(executableName);
+            }
+
+            // Check common extensions on Windows if none provided
+            var extensions = new List<string> { "" }; // Check for exact match first
+            if (OperatingSystem.IsWindows() && !Path.HasExtension(executableName))
+            {
+                // Use PATHEXT environment variable if available, otherwise common defaults
+                string pathExt = Environment.GetEnvironmentVariable("PATHEXT");
+                if (!string.IsNullOrEmpty(pathExt))
+                {
+                    extensions.AddRange(pathExt.Split(';').Where(e => e.Trim().Length > 0));
+                }
+                else
+                {
+                    // Fallback extensions if PATHEXT is missing
+                    extensions.AddRange(new[] { ".COM", ".EXE", ".BAT", ".CMD" });
+                }
+            }
+
+            // Get PATH directories
+            string? pathVariable = Environment.GetEnvironmentVariable("PATH");
+            if (string.IsNullOrEmpty(pathVariable))
+            {
+                _logger?.Log("[Stdio] Warning: PATH environment variable is empty or null.");
+                return null;
+            }
+
+            var pathDirectories = pathVariable.Split(Path.PathSeparator); // Handles ';' on Windows, ':' on Linux/Mac
+
+            // Search each directory in PATH
+            foreach (string pathDir in pathDirectories)
+            {
+                string trimmedPathDir = pathDir.Trim();
+                if (string.IsNullOrEmpty(trimmedPathDir)) continue;
+
+                // Check for the executable with each potential extension
+                foreach (string extension in extensions)
+                {
+                    string potentialPath = Path.Combine(trimmedPathDir, executableName + extension);
+                    try
+                    {
+                        if (File.Exists(potentialPath))
+                        {
+                            _logger?.Log($"[Stdio] Found '{executableName}' candidate at '{potentialPath}'");
+                            // Optionally add execute permission check on Linux/Mac if needed
+                            return potentialPath; // Found it
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+                    {
+                        // Ignore errors checking specific paths (e.g., permissions, invalid chars)
+                        _logger?.Log($"[Stdio] Debug: Ignored error checking path '{potentialPath}': {ex.Message}");
+                    }
+                }
+            }
+
+            _logger?.Log($"[Stdio] Executable '{executableName}' not found in any PATH directories.");
+            return null; // Not found
+        }
+
+
+        // --- Keep the existing QuoteArgumentIfNeeded helper method ---
+        /// <summary>
+        /// Helper method to quote an argument if it contains spaces.
+        /// </summary>
+        private static string QuoteArgumentIfNeeded(string argument)
+        {
+            if (string.IsNullOrEmpty(argument)) return "\"\"";
+            if (argument.Contains(' ') || argument.Contains('\"')) return $"\"{argument.Replace("\"", "\\\"")}\""; // Basic escaping + quoting
+            return argument;
+        }
+
         // Handle process exit
         private void OnProcessExited(object sender, EventArgs e)
         {
@@ -400,21 +615,25 @@ namespace AIAgentTest.API_Clients.MCP
                     // Make sure we're really connected before proceeding
                     if (!IsConnected)
                     {
-                        _logger?.Log("[Stdio] Server is not connected, cannot discover tools. Falling back to hardcoded tools.");
-                        _cachedTools = GetHardcodedTools();
+                        _logger?.Log("[Stdio] Server is not connected, cannot discover tools.");
+                        //_logger?.Log("[Stdio] Server is not connected, cannot discover tools. Falling back to hardcoded tools.");
+                        //_cachedTools = GetHardcodedTools();
                         return _cachedTools;
                     }
                     
                     // Wait a bit longer for the server to be ready for requests
                     _logger?.Log("[Stdio] Waiting for server to be ready for requests...");
-                    await Task.Delay(1000);
-                    
+                    await Task.Delay(10);
+                    //await Task.Delay(1000);
+
                     // Send request for tools listing
                     _logger?.Log("[Stdio] Sending tools/list request to stdio server");
                     var result = await SendRequestAsync<JsonElement>("tools/list");
                     
                     _logger?.Log($"[Stdio] Received response from tools/list: {result.GetRawText()}");
-                    
+
+                    var test = result.GetRawText();
+
                     if (result.TryGetProperty("tools", out var toolsElement))
                     {
                         int toolCount = toolsElement.GetArrayLength();
@@ -430,7 +649,14 @@ namespace AIAgentTest.API_Clients.MCP
                         
                         // Deserialize the tools from the response
                         var discoveredTools = JsonSerializer.Deserialize<List<ToolDefinition>>(toolsElement.GetRawText(), _jsonOptions);
-                        
+
+                        foreach (var tool in discoveredTools)
+                        {
+                            // Process the raw input schema to populate the compatibility fields
+                            if(tool.RawInputSchema.ValueKind == JsonValueKind.Object)
+                                tool.ProcessRawInputSchema();
+                        }
+
                         // Enhance the tools with proper metadata
                         foreach (var tool in discoveredTools)
                         {
@@ -568,8 +794,11 @@ namespace AIAgentTest.API_Clients.MCP
             }
             catch (Exception ex)
             {
-                _logger?.Log($"[Stdio] Error executing tool '{toolName}': {ex.Message}");
-                _logger?.Log($"[Stdio] Exception details: {ex}");
+                _logger?.Log($"[Stdio] Error executing tool '{toolName}': {ex.GetType().Name}: {ex.Message}");
+                _logger?.Log($"[Stdio] Stack trace: {ex.StackTrace}");
+
+                //_logger?.Log($"[Stdio] Error executing tool '{toolName}': {ex.Message}");
+                //_logger?.Log($"[Stdio] Exception details: {ex}");
                 return new { error = $"Error executing tool: {ex.Message}" };
             }
         }
@@ -673,8 +902,11 @@ namespace AIAgentTest.API_Clients.MCP
                 
                 string jsonRequest = JsonSerializer.Serialize(request, _jsonOptions);
                 _logger?.Log($"Sending JSON-RPC request: {jsonRequest}");
+                //_stdinWriter.NewLine = "\n";
                 await _stdinWriter.WriteLineAsync(jsonRequest.AsMemory(), cancellationToken);
+                //await _stdinWriter.WriteLineAsync(jsonRequest.AsMemory(), cancellationToken);
                 await _stdinWriter.FlushAsync();
+                await Task.Delay(50);
 
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(TimeSpan.FromSeconds(60)); // Use a longer timeout
@@ -698,6 +930,23 @@ namespace AIAgentTest.API_Clients.MCP
             }
             catch (Exception ex)
             {
+                //if(ex.Message.Contains("32601"))
+                //{
+                //    await Task.Delay(1000); // Wait 1 second
+                //    try
+                //    {
+                //        string jsonRequest = JsonSerializer.Serialize(request, _jsonOptions);
+                //        // Prepare input again or reuse...
+                //        var result = await toolHandler(input);
+                //        // process result...
+                //    }
+                //    catch (Exception retryEx)
+                //    {
+                //        _logger?.Log($"[Stdio] Retry failed: {retryEx.Message}");
+                //        // Handle final failure... return error object, throw, etc.
+                //    }
+                //}
+                
                 _pendingRequests.TryRemove(requestId, out _);
                 _logger?.Log($"Error in SendRequestAsync: {ex.Message}");
                 throw;

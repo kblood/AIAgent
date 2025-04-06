@@ -64,51 +64,51 @@ namespace AIAgentTest.Services.MCP
                 },
                 GetDateTimeHandler);
             
-            // Register file read tool
-            registry.RegisterTool(
-                new ToolDefinition
-                {
-                    Name = "read_file",
-                    Description = "Read the contents of a file",
-                    Schema = JsonSerializer.Serialize(new
-                    {
-                        type = "object",
-                        properties = new
-                        {
-                            path = new
-                            {
-                                type = "string",
-                                description = "The path to the file"
-                            }
-                        },
-                        required = new[] { "path" }
-                    }),
-                    Tags = new[] { "File System" }
-                },
-                ReadFileHandler);
+            //// Register file read tool
+            //registry.RegisterTool(
+            //    new ToolDefinition
+            //    {
+            //        Name = "read_file",
+            //        Description = "Read the contents of a file",
+            //        Schema = JsonSerializer.Serialize(new
+            //        {
+            //            type = "object",
+            //            properties = new
+            //            {
+            //                path = new
+            //                {
+            //                    type = "string",
+            //                    description = "The path to the file"
+            //                }
+            //            },
+            //            required = new[] { "path" }
+            //        }),
+            //        Tags = new[] { "File System" }
+            //    },
+            //    ReadFileHandler);
             
-            // Register directory listing tool
-            registry.RegisterTool(
-                new ToolDefinition
-                {
-                    Name = "list_directory",
-                    Description = "List files and directories in a directory",
-                    Schema = JsonSerializer.Serialize(new
-                    {
-                        type = "object",
-                        properties = new
-                        {
-                            path = new
-                            {
-                                type = "string",
-                                description = "The path to the directory"
-                            }
-                        },
-                        required = new[] { "path" }
-                    }),
-                    Tags = new[] { "File System" }
-                },
-                ListDirectoryHandler);
+            //// Register directory listing tool
+            //registry.RegisterTool(
+            //    new ToolDefinition
+            //    {
+            //        Name = "list_directory",
+            //        Description = "List files and directories in a directory",
+            //        Schema = JsonSerializer.Serialize(new
+            //        {
+            //            type = "object",
+            //            properties = new
+            //            {
+            //                path = new
+            //                {
+            //                    type = "string",
+            //                    description = "The path to the directory"
+            //                }
+            //            },
+            //            required = new[] { "path" }
+            //        }),
+            //        Tags = new[] { "File System" }
+            //    },
+            //    ListDirectoryHandler);
         }
         
         /// <summary>

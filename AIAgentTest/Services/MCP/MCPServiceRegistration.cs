@@ -98,7 +98,8 @@ namespace AIAgentTest.Services.MCP
 
             // Create command and arguments with proper executable path
             string command = "cmd.exe";
-            string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "--stdio", targetDirectory };
+            string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", targetDirectory };
+            //string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "--stdio", targetDirectory };
 
             // Completely skip stdio client due to stability issues
             logger?.Log("Using SimplifiedMCPClient instead of StdioMCPServerClient due to stability issues");

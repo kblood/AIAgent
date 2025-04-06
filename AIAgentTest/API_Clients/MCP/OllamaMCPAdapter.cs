@@ -176,13 +176,6 @@ To read a file:
   }
 }
 
-Available tools include:
-- read_file: Read the contents of a file (parameter: path as string)
-- list_directory: List files in a directory (parameter: path as string)
-- write_file: Write content to a file (parameters: path as string, content as string)
-- get_date_time: Get the current date and time (no parameters needed)
-- list_tools: List all available tools and their descriptions (no parameters needed)
-
 If you don't need to use a tool, just respond normally with text.
 ";
             

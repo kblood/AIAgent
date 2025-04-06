@@ -94,6 +94,8 @@ namespace AIAgentTest.API_Clients.MCP
             // If server isn't available, go straight to hardcoded tools
             if (!serverAvailable)
             {
+                _logger?.Log("[MCP] Server not available, no tools.");
+                return _cachedTools;
                 _logger?.Log("[MCP] Server not available, using hardcoded tools list");
                 _cachedTools = GetHardcodedTools();
                 return _cachedTools;
@@ -121,7 +123,7 @@ namespace AIAgentTest.API_Clients.MCP
             {
                 _logger?.Log($"[MCP] Error fetching tools: {ex.Message}");
                 // Fall back to hardcoded tools
-                _cachedTools = GetHardcodedTools();
+                //_cachedTools = GetHardcodedTools();
                 return _cachedTools;
             }
         }
@@ -742,6 +744,9 @@ namespace AIAgentTest.API_Clients.MCP
         private List<ToolDefinition> GetHardcodedTools()
         {
             _logger?.Log("[MCP] Using hardcoded tool definitions as fallback");
+
+            return null;
+
             return new List<ToolDefinition>
             {
                 // Tool 1: read_file

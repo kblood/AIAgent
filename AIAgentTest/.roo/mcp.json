@@ -7,14 +7,6 @@
         "@modelcontextprotocol/server-filesystem",
         "C:/"
       ]
-    },
-    "Fileserver2": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "C:/"
-      ]
     }
   }
 }
