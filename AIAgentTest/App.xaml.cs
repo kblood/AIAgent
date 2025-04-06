@@ -82,6 +82,32 @@ namespace AIAgentTest
                 
                 // DebugViewModel was already created
                 
+                // Check if MCPClientFactory service is available
+                // mcpClientFactory was already declared above
+                if (mcpClientFactory != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("MCPClientFactory service is available.");
+                    var servers = mcpClientFactory.GetAllRegisteredServers();
+                    System.Diagnostics.Debug.WriteLine($"MCPClientFactory has {servers.Count} registered servers: {string.Join(", ", servers)}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("ERROR: MCPClientFactory service is NOT available.");
+                }
+
+                // Check if ToolRegistry service is available
+                var toolRegistry = ServiceProvider.GetService<IToolRegistry>();
+                if (toolRegistry != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("ToolRegistry service is available.");
+                    var tools = toolRegistry.GetAllTools();
+                    System.Diagnostics.Debug.WriteLine($"ToolRegistry has {tools.Count} registered tools.");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("ERROR: ToolRegistry service is NOT available.");
+                }
+
                 // Create MCP tool manager ViewModels
                 var toolManagerViewModel = new ToolManagerViewModel(
                     ServiceProvider.GetService<IToolRegistry>());

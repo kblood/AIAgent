@@ -101,15 +101,20 @@ namespace AIAgentTest.API_Clients.MCP
             
             try
             {
-                _logger?.Log($"[MCP] Fetching tools from {_toolsEndpoint}");
-                var response = await _httpClient.GetAsync(_toolsEndpoint);
-                response.EnsureSuccessStatusCode();
+                _logger?.Log($"[MCP] Attempting more comprehensive tool discovery");
+                var discoveredTools = await DiscoverToolsAsync();
                 
-                var toolsResponse = await response.Content.ReadFromJsonAsync<ToolsResponse>();
-                _cachedTools = toolsResponse.Tools;
-                _isConnected = true;
+                if (discoveredTools != null && discoveredTools.Count > 0)
+                {
+                    _logger?.Log($"[MCP] Found {discoveredTools.Count} tools via discovery");
+                    _cachedTools = discoveredTools;
+                    _isConnected = true;
+                    return _cachedTools;
+                }
                 
-                _logger?.Log($"[MCP] Successfully fetched {_cachedTools.Count} tools from server");
+                // Fall back to hardcoded tools if discovery fails
+                _logger?.Log("[MCP] No tools discovered, falling back to hardcoded tools");
+                _cachedTools = GetHardcodedTools();
                 return _cachedTools;
             }
             catch (Exception ex)
@@ -538,6 +543,86 @@ namespace AIAgentTest.API_Clients.MCP
 
         #region Helper Methods and Types
 
+        /// <summary>
+        /// Try to discover tools using multiple potential endpoints
+        /// </summary>
+        private async Task<List<ToolDefinition>> DiscoverToolsAsync()
+        {
+            _logger?.Log("Attempting to discover tools from multiple potential endpoints");
+            
+            // List of potential endpoints to try
+            var endpoints = new string[] 
+            {
+                $"{_baseUrl}/tools",
+                $"{_baseUrl}/api/tools",
+                $"{_baseUrl}/_tools",
+                $"{_baseUrl}/v1/tools",
+                $"{_baseUrl}/discover"
+            };
+            
+            foreach (var endpoint in endpoints)
+            {
+                try
+                {
+                    _logger?.Log($"Trying to fetch tools from {endpoint}");
+                    var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+                    var response = await _httpClient.SendAsync(request);
+                    
+                    if (response.IsSuccessStatusCode)
+                    {
+                        _logger?.Log($"Successful response from {endpoint}");
+                        var content = await response.Content.ReadAsStringAsync();
+                        
+                        if (string.IsNullOrEmpty(content))
+                        {
+                            _logger?.Log("Response content is empty");
+                            continue;
+                        }
+                        
+                        // Try to parse as ToolsResponse
+                        try
+                        {
+                            var toolsResponse = JsonSerializer.Deserialize<ToolsResponse>(content);
+                            if (toolsResponse?.Tools != null && toolsResponse.Tools.Count > 0)
+                            {
+                                _logger?.Log($"Found {toolsResponse.Tools.Count} tools in wrapper format");
+                                _isConnected = true;
+                                return toolsResponse.Tools;
+                            }
+                        }
+                        catch (JsonException)
+                        {
+                            // Try to parse as direct list
+                            try
+                            {
+                                var tools = JsonSerializer.Deserialize<List<ToolDefinition>>(content);
+                                if (tools != null && tools.Count > 0)
+                                {
+                                    _logger?.Log($"Found {tools.Count} tools in direct list format");
+                                    _isConnected = true;
+                                    return tools;
+                                }
+                            }
+                            catch (JsonException)
+                            {
+                                _logger?.Log("Failed to parse response as tools list");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _logger?.Log($"Failed response from {endpoint}: {response.StatusCode}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Log($"Error fetching from {endpoint}: {ex.Message}");
+                }
+            }
+            
+            _logger?.Log("No tools found from any endpoint");
+            return null;
+        }
         /// <summary>
         /// Response format for tools list from server
         /// </summary>

@@ -70,24 +70,40 @@ namespace AIAgentTest.ViewModels
         /// </summary>
         private void LoadTools()
         {
-            // Get all tools including disabled ones
-            var allDefinitions = _toolRegistry.GetAllToolDefinitions();
-            
-            // Group by category
-            var groupedTools = allDefinitions.GroupBy(t => t.Tags.FirstOrDefault() ?? "General");
-            
-            Categories.Clear();
-            
-            foreach (var group in groupedTools.OrderBy(g => g.Key))
+            if (_toolRegistry == null)
             {
-                var category = new ToolCategoryViewModel(group.Key);
+                Console.WriteLine("ToolRegistry is null in ToolManagerViewModel");
+                return;
+            }
+            
+            try
+            {
+                // Get all tools including disabled ones
+                var allDefinitions = _toolRegistry.GetAllToolDefinitions();
+                Console.WriteLine($"Found {allDefinitions.Count} tool definitions in registry");
                 
-                foreach (var tool in group.OrderBy(t => t.Name))
+                // Group by category
+                var groupedTools = allDefinitions.GroupBy(t => t.Tags?.FirstOrDefault() ?? "General");
+                
+                Categories.Clear();
+                
+                foreach (var group in groupedTools.OrderBy(g => g.Key))
                 {
-                    category.Tools.Add(new ToolToggleViewModel(tool, _toolRegistry));
+                    var category = new ToolCategoryViewModel(group.Key);
+                    Console.WriteLine($"Creating category: {group.Key} with {group.Count()} tools");
+                    
+                    foreach (var tool in group.OrderBy(t => t.Name))
+                    {
+                        category.Tools.Add(new ToolToggleViewModel(tool, _toolRegistry));
+                        Console.WriteLine($"Added tool: {tool.Name} to category {group.Key}");
+                    }
+                    
+                    Categories.Add(category);
                 }
-                
-                Categories.Add(category);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading tools: {ex.Message}");
             }
         }
         

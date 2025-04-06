@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using AIAgentTest.Services;
 using AIAgentTest.Services.Interfaces;
 using AIAgentTest.Services.MCP;
+using IDebugLogger = AIAgentTest.Services.Interfaces.IDebugLogger;
 
 namespace AIAgentTest.API_Clients.MCP
 {
@@ -58,7 +59,9 @@ namespace AIAgentTest.API_Clients.MCP
             _serverProcess.StandardInput != null && 
             _serverProcess.StandardInput.BaseStream != null;
         
-        // Start the server
+        /// <summary>
+        /// Start the server process
+        /// </summary>
         public async Task<bool> StartServerAsync()
         {
             if (IsConnected)
@@ -141,25 +144,6 @@ namespace AIAgentTest.API_Clients.MCP
                 
                 _isStarted = true;
                 _logger?.Log("MCP server started successfully in stdio mode");
-                
-                // Now immediately try to get tools to verify it's working
-                try
-                {
-                    _logger?.Log("Preloading tools to verify server is working");
-                    
-                    // Skip recursive server start by using hardcoded tools if needed
-                    if (_cachedTools == null)
-                    {
-                        _cachedTools = GetHardcodedTools();
-                    }
-                    
-                    _logger?.Log($"Successfully loaded {_cachedTools.Count} tools");
-                }
-                catch (Exception ex)
-                {
-                    _logger?.Log($"Error in tool verification: {ex.Message}");
-                    // Don't fail the server start just because tools failed
-                }
                 
                 return true;
             }
@@ -303,51 +287,81 @@ namespace AIAgentTest.API_Clients.MCP
             _isStarted = false;
         }
 
-        // IMCPServerClient implementation
+        /// <summary>
+        /// Implements IMCPServerClient.StopServer
+        /// </summary>
         public void StopServer()
         {
             Task.Run(StopServerAsync).GetAwaiter().GetResult();
         }
         
-        // Get available tools
-        public async Task<List<ToolDefinition>> GetToolsAsync(bool startServerIfNeeded = true)
+        /// <summary>
+        /// Extended version of GetToolsAsync with option to start server
+        /// </summary>
+        /// <param name="startServerIfNeeded">Whether to start the server if it's not already running</param>
+        /// <param name="clearCache">Whether to clear the cached tools and try to get fresh ones from the server</param>
+        /// <returns>List of tool definitions</returns>
+        private async Task<List<ToolDefinition>> GetToolsWithStartOption(bool startServerIfNeeded = true, bool clearCache = false)
         {
-            // Return cached tools if available
-            if (_cachedTools != null && _cachedTools.Count > 0)
+            _logger?.Log($"[Stdio] GetToolsWithStartOption called with startServerIfNeeded={startServerIfNeeded}, clearCache={clearCache}");
+            
+            // Clear cache if requested
+            if (clearCache && _cachedTools != null)
             {
+                _logger?.Log("[Stdio] Clearing cached tools as requested");
+                _cachedTools = null;
+            }
+            
+            // Return cached tools if available and not clearing cache
+            if (!clearCache && _cachedTools != null && _cachedTools.Count > 0)
+            {
+                _logger?.Log($"[Stdio] Returning {_cachedTools.Count} cached tools");
                 return _cachedTools;
             }
             
-            // Only try to start the server if requested and we're not already starting
+            // Only try to start the server if requested and we're not already started
             if (!_isStarted && startServerIfNeeded)
             {
+                _logger?.Log("[Stdio] Server not started, attempting to start...");
                 bool started = false;
                 try
                 {
                     started = await StartServerAsync();
+                    _logger?.Log($"[Stdio] StartServerAsync result: {started}");
                 }
                 catch (Exception ex)
                 {
-                    _logger?.Log($"Error starting server during GetToolsAsync: {ex.Message}");
+                    _logger?.Log($"[Stdio] Error starting server during GetToolsWithStartOption: {ex.Message}");
                     started = false;
                 }
                 
                 if (!started)
                 {
-                    _logger?.Log("Failed to start server, using hardcoded tools");
+                    _logger?.Log("[Stdio] Failed to start server, falling back to hardcoded tools");
                     _cachedTools = GetHardcodedTools();
                     return _cachedTools;
                 }
             }
             
+            // At this point, we should have a running server or we couldn't start it
+            // Let's try to communicate with it to get the tools
             try
             {
-                _logger?.Log("Server running in stdio mode, sending tools/list request");
+                _logger?.Log("[Stdio] Attempting to discover tools from server");
                 
                 try
                 {
+                    // Make sure we're really connected before proceeding
+                    if (!IsConnected)
+                    {
+                        _logger?.Log("[Stdio] Server is not connected, cannot discover tools. Falling back to hardcoded tools.");
+                        _cachedTools = GetHardcodedTools();
+                        return _cachedTools;
+                    }
+                    
                     // Wait a bit longer for the server to be ready for requests
-                    await Task.Delay(2000);
+                    _logger?.Log("[Stdio] Waiting for server to be ready for requests...");
+                    await Task.Delay(1000);
                     
                     // Send request for tools listing
                     _logger?.Log("[Stdio] Sending tools/list request to stdio server");
@@ -359,7 +373,46 @@ namespace AIAgentTest.API_Clients.MCP
                     {
                         int toolCount = toolsElement.GetArrayLength();
                         _logger?.Log($"[Stdio] Successfully retrieved {toolCount} tools from server");
-                        _cachedTools = JsonSerializer.Deserialize<List<ToolDefinition>>(toolsElement.GetRawText(), _jsonOptions);
+                        
+                        // Only accept empty tools list if we successfully communicated with the server
+                        if (toolCount == 0)
+                        {
+                            _logger?.Log("[Stdio] Server returned empty tools list, using empty list");
+                            _cachedTools = new List<ToolDefinition>();
+                            return _cachedTools;
+                        }
+                        
+                        // Deserialize the tools from the response
+                        var discoveredTools = JsonSerializer.Deserialize<List<ToolDefinition>>(toolsElement.GetRawText(), _jsonOptions);
+                        
+                        // Enhance the tools with proper metadata
+                        foreach (var tool in discoveredTools)
+                        {
+                            // Add or update metadata
+                            if (tool.Metadata == null)
+                            {
+                                tool.Metadata = new Dictionary<string, object>();
+                            }
+                            
+                            if (!tool.Metadata.ContainsKey("server_name"))
+                            {
+                                tool.Metadata["server_name"] = "FileServer";
+                            }
+                            
+                            if (!tool.Metadata.ContainsKey("server_type"))
+                            {
+                                tool.Metadata["server_type"] = "filesystem";
+                            }
+                            
+                            // Add a standard tag if missing
+                            if (tool.Tags == null || tool.Tags.Length == 0)
+                            {
+                                tool.Tags = new[] { "Filesystem", "MCP" };
+                            }
+                        }
+                        
+                        _logger?.Log($"[Stdio] Successfully processed {discoveredTools.Count} tools from server");
+                        _cachedTools = discoveredTools;
                         return _cachedTools;
                     }
                     else
@@ -369,22 +422,39 @@ namespace AIAgentTest.API_Clients.MCP
                 }
                 catch (Exception ex)
                 {
-                    _logger?.Log($"Error getting tools via JSON-RPC: {ex.Message}");
-                    _logger?.Log("Using hardcoded tool definitions as fallback");
+                    _logger?.Log($"[Stdio] Error getting tools via JSON-RPC: {ex.Message}");
+                    _logger?.Log($"[Stdio] Stack trace: {ex.StackTrace}");
                 }
             }
             catch (Exception ex)
             {
-                _logger?.Log($"Error in GetToolsAsync: {ex.Message}");
+                _logger?.Log($"[Stdio] Error in GetToolsWithStartOption: {ex.Message}");
             }
             
-            // Fallback to hardcoded tools if anything went wrong
-            _logger?.Log("Using hardcoded tool definitions");
-            _cachedTools = GetHardcodedTools();
+            // If we get here, something went wrong with the server communication
+            // Fall back to hardcoded tools - lets not do this anyway.
+            //_logger?.Log("[Stdio] All attempts to get tools from server failed, using hardcoded tools as last resort");
+            //_cachedTools = GetHardcodedTools();
+
+
             return _cachedTools;
         }
         
-        // Execute a tool
+        /// <summary>
+        /// IMCPServerClient implementation of GetToolsAsync
+        /// </summary>
+        public async Task<List<ToolDefinition>> GetToolsAsync()
+        {
+            _logger?.Log("[Stdio] IMCPServerClient.GetToolsAsync() called");
+            
+            // We're explicitly bypassing the cache here to ensure we talk to the server
+            _logger?.Log("[Stdio] Calling GetToolsWithStartOption with clearCache=true to force server communication");
+            return await GetToolsWithStartOption(true, true);
+        }
+        
+        /// <summary>
+        /// Execute a tool on the server
+        /// </summary>
         public async Task<object> ExecuteToolAsync(string toolName, object input)
         {
             if (string.IsNullOrEmpty(toolName))
@@ -423,7 +493,9 @@ namespace AIAgentTest.API_Clients.MCP
             }
         }
         
-        // Check if server is available
+        /// <summary>
+        /// Check if the server is available
+        /// </summary>
         public async Task<bool> IsAvailableAsync()
         {
             if (_isStarted && IsConnected)
@@ -432,7 +504,9 @@ namespace AIAgentTest.API_Clients.MCP
             return await StartServerAsync();
         }
         
-        // Send a request to the server
+        /// <summary>
+        /// Send a request to the server
+        /// </summary>
         private async Task<TResponse> SendRequestAsync<TResponse>(string method, object parameters = null, CancellationToken cancellationToken = default)
         {
             if (!IsConnected) 
@@ -517,14 +591,18 @@ namespace AIAgentTest.API_Clients.MCP
             }
         }
 
-        // Dispose resources
+        /// <summary>
+        /// Dispose resources
+        /// </summary>
         public void Dispose()
         {
             StopServer();
             GC.SuppressFinalize(this);
         }
         
-        // Async dispose
+        /// <summary>
+        /// Async dispose
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             await StopServerAsync();
@@ -565,122 +643,118 @@ namespace AIAgentTest.API_Clients.MCP
                         { "server_name", "FileServer" },
                         { "server_type", "filesystem" }
                     }
-                },
-                
-                // Tool 2: write_file
-                new ToolDefinition
-                {
-                    Name = "write_file",
-                    Description = "Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.",
-                    Input = new Dictionary<string, object>
-                    {
-                        { "type", "object" },
-                        { "properties", new Dictionary<string, object>
-                            {
-                                { "path", new Dictionary<string, string>
-                                    {
-                                        { "type", "string" },
-                                        { "description", "Path to the file" }
-                                    }
-                                },
-                                { "content", new Dictionary<string, string>
-                                    {
-                                        { "type", "string" },
-                                        { "description", "Content to write" }
-                                    }
-                                }
-                            }
-                        },
-                        { "required", new[] { "path", "content" } }
-                    },
-                    Tags = new[] { "Filesystem", "MCP" },
-                    Metadata = new Dictionary<string, object>
-                    {
-                        { "server_name", "FileServer" },
-                        { "server_type", "filesystem" }
-                    }
-                },
-                
-                // Tool 3: list_directory
-                new ToolDefinition
-                {
-                    Name = "list_directory",
-                    Description = "Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.",
-                    Input = new Dictionary<string, object>
-                    {
-                        { "type", "object" },
-                        { "properties", new Dictionary<string, object>
-                            {
-                                { "path", new Dictionary<string, string>
-                                    {
-                                        { "type", "string" },
-                                        { "description", "Path to the directory" }
-                                    }
-                                }
-                            }
-                        },
-                        { "required", new[] { "path" } }
-                    },
-                    Tags = new[] { "Filesystem", "MCP" },
-                    Metadata = new Dictionary<string, object>
-                    {
-                        { "server_name", "FileServer" },
-                        { "server_type", "filesystem" }
-                    }
-                },
-                
-                // Tool 4: directory_tree
-                new ToolDefinition
-                {
-                    Name = "directory_tree",
-                    Description = "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
-                    Input = new Dictionary<string, object>
-                    {
-                        { "type", "object" },
-                        { "properties", new Dictionary<string, object>
-                            {
-                                { "path", new Dictionary<string, string>
-                                    {
-                                        { "type", "string" },
-                                        { "description", "Path to the directory" }
-                                    }
-                                }
-                            }
-                        },
-                        { "required", new[] { "path" } }
-                    },
-                    Tags = new[] { "Filesystem", "MCP" },
-                    Metadata = new Dictionary<string, object>
-                    {
-                        { "server_name", "FileServer" },
-                        { "server_type", "filesystem" }
-                    }
-                },
-                
-                // Tool 5: list_allowed_directories
-                new ToolDefinition
-                {
-                    Name = "list_allowed_directories",
-                    Description = "Returns the list of directories that this server is allowed to access. Use this to understand which directories are available before trying to access files.",
-                    Input = new Dictionary<string, object>
-                    {
-                        { "type", "object" },
-                        { "properties", new Dictionary<string, object>() },
-                        { "required", new string[] { } }
-                    },
-                    Tags = new[] { "Filesystem", "MCP" },
-                    Metadata = new Dictionary<string, object>
-                    {
-                        { "server_name", "FileServer" },
-                        { "server_type", "filesystem" }
-                    }
                 }
+                //,
+                
+                //// Tool 2: write_file
+                //new ToolDefinition
+                //{
+                //    Name = "write_file",
+                //    Description = "Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.",
+                //    Input = new Dictionary<string, object>
+                //    {
+                //        { "type", "object" },
+                //        { "properties", new Dictionary<string, object>
+                //            {
+                //                { "path", new Dictionary<string, string>
+                //                    {
+                //                        { "type", "string" },
+                //                        { "description", "Path to the file" }
+                //                    }
+                //                },
+                //                { "content", new Dictionary<string, string>
+                //                    {
+                //                        { "type", "string" },
+                //                        { "description", "Content to write" }
+                //                    }
+                //                }
+                //            }
+                //        },
+                //        { "required", new[] { "path", "content" } }
+                //    },
+                //    Tags = new[] { "Filesystem", "MCP" },
+                //    Metadata = new Dictionary<string, object>
+                //    {
+                //        { "server_name", "FileServer" },
+                //        { "server_type", "filesystem" }
+                //    }
+                //},
+                
+                //// Tool 3: list_directory
+                //new ToolDefinition
+                //{
+                //    Name = "list_directory",
+                //    Description = "Get a detailed listing of all files and directories in a specified path. Results clearly distinguish between files and directories with [FILE] and [DIR] prefixes. This tool is essential for understanding directory structure and finding specific files within a directory. Only works within allowed directories.",
+                //    Input = new Dictionary<string, object>
+                //    {
+                //        { "type", "object" },
+                //        { "properties", new Dictionary<string, object>
+                //            {
+                //                { "path", new Dictionary<string, string>
+                //                    {
+                //                        { "type", "string" },
+                //                        { "description", "Path to the directory" }
+                //                    }
+                //                }
+                //            }
+                //        },
+                //        { "required", new[] { "path" } }
+                //    },
+                //    Tags = new[] { "Filesystem", "MCP" },
+                //    Metadata = new Dictionary<string, object>
+                //    {
+                //        { "server_name", "FileServer" },
+                //        { "server_type", "filesystem" }
+                //    }
+                //},
+                
+                //// Tool 4: directory_tree
+                //new ToolDefinition
+                //{
+                //    Name = "directory_tree",
+                //    Description = "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
+                //    Input = new Dictionary<string, object>
+                //    {
+                //        { "type", "object" },
+                //        { "properties", new Dictionary<string, object>
+                //            {
+                //                { "path", new Dictionary<string, string>
+                //                    {
+                //                        { "type", "string" },
+                //                        { "description", "Path to the directory" }
+                //                    }
+                //                }
+                //            }
+                //        },
+                //        { "required", new[] { "path" } }
+                //    },
+                //    Tags = new[] { "Filesystem", "MCP" },
+                //    Metadata = new Dictionary<string, object>
+                //    {
+                //        { "server_name", "FileServer" },
+                //        { "server_type", "filesystem" }
+                //    }
+                //},
+                
+                //// Tool 5: list_allowed_directories
+                //new ToolDefinition
+                //{
+                //    Name = "list_allowed_directories",
+                //    Description = "Returns the list of directories that this server is allowed to access. Use this to understand which directories are available before trying to access files.",
+                //    Input = new Dictionary<string, object>
+                //    {
+                //        { "type", "object" },
+                //        { "properties", new Dictionary<string, object>() },
+                //        { "required", new string[] { } }
+                //    },
+                //    Tags = new[] { "Filesystem", "MCP" },
+                //    Metadata = new Dictionary<string, object>
+                //    {
+                //        { "server_name", "FileServer" },
+                //        { "server_type", "filesystem" }
+                //    }
+                //}
             };
-        }
-
-        public Task<List<ToolDefinition>> GetToolsAsync()
-        {
-            throw new NotImplementedException();
         }
     }
 }

@@ -192,7 +192,7 @@ namespace AIAgentTest.ViewModels
                     var args = serverEditorViewModel.Arguments.Replace("\\", "/").Split(' '); // Use forward slashes
                     
                     // Create a new server client - use StdioMCPServerClient for better reliability
-                    var serverClient = new StdioMCPServerClient(command, args, "C:/", ServiceProvider.GetService<IDebugLogger>());
+                    var serverClient = new StdioMCPServerClient(command, args, "C:/", ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IDebugLogger>());
                     
                     // Register with the client factory
                     _mcpClientFactory.RegisterMCPServer(serverName, serverClient);
@@ -263,7 +263,7 @@ namespace AIAgentTest.ViewModels
                     var args = serverEditorViewModel.Arguments.Replace("\\", "/").Split(' '); // Use forward slashes
                     
                     // Create a new server client - use StdioMCPServerClient for better reliability
-                    var serverClient = new StdioMCPServerClient(command, args, "C:/", ServiceProvider.GetService<IDebugLogger>());
+                    var serverClient = new StdioMCPServerClient(command, args, "C:/", ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IDebugLogger>());
                     
                     // Register with the client factory
                     _mcpClientFactory.RegisterMCPServer(serverName, serverClient);

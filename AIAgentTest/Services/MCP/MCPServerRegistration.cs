@@ -8,6 +8,7 @@ using AIAgentTest.API_Clients.MCP;
 using AIAgentTest.Services.Interfaces;
 using System.Linq;
 using System.Threading;
+using IDebugLogger = AIAgentTest.Services.Interfaces.IDebugLogger;
 
 namespace AIAgentTest.Services.MCP
 {
@@ -47,7 +48,7 @@ namespace AIAgentTest.Services.MCP
         /// <param name="logger">Debug logger</param>
         /// <param name="skipStartup">Whether to skip starting the servers during registration</param>
         /// <returns>Task with the number of registered servers</returns>
-        public static async Task<int> RegisterMCPServersAsync(MCPClientFactory mcpClientFactory, IDebugLogger logger = null, bool skipStartup = false)
+        public static async Task<int> RegisterMCPServersAsync(MCPClientFactory mcpClientFactory, AIAgentTest.Services.Interfaces.IDebugLogger logger = null, bool skipStartup = false)
         {
             if (mcpClientFactory == null)
                 throw new ArgumentNullException(nameof(mcpClientFactory));
@@ -278,7 +279,7 @@ namespace AIAgentTest.Services.MCP
         /// <param name="url">Server URL</param>
         /// <param name="logger">Debug logger</param>
         /// <returns>The registered client</returns>
-        public static IMCPServerClient RegisterHttpServer(MCPClientFactory mcpClientFactory, string name, string url, IDebugLogger logger = null)
+        public static IMCPServerClient RegisterHttpServer(MCPClientFactory mcpClientFactory, string name, string url, AIAgentTest.Services.Interfaces.IDebugLogger logger = null)
         {
             logger?.Log($"Registering HTTP MCP server '{name}' at URL {url}");
             
@@ -318,7 +319,7 @@ namespace AIAgentTest.Services.MCP
             MCPClientFactory mcpClientFactory, 
             string name, 
             string targetDirectory, 
-            IDebugLogger logger = null)
+            AIAgentTest.Services.Interfaces.IDebugLogger logger = null)
         {
             logger?.Log($"Registering Stdio MCP server '{name}' for directory {targetDirectory}");
             
@@ -368,7 +369,7 @@ namespace AIAgentTest.Services.MCP
         /// <param name="config">Server configuration</param>
         /// <param name="logger">Debug logger</param>
         /// <returns>Task representing the async operation</returns>
-        private static async Task RegisterServerFromConfig(MCPClientFactory mcpClientFactory, string name, MCPServerConfig config, IDebugLogger logger = null)
+        private static async Task RegisterServerFromConfig(MCPClientFactory mcpClientFactory, string name, MCPServerConfig config, AIAgentTest.Services.Interfaces.IDebugLogger logger = null)
         {
             logger?.Log($"Registering server '{name}' with config: {config.Command} {string.Join(" ", config.Args)}");
             

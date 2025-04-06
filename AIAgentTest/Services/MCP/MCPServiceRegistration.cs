@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System;
 using System.IO;
 using AIAgentTest.ViewModels;
+using IDebugLogger = AIAgentTest.Services.Interfaces.IDebugLogger;
 
 namespace AIAgentTest.Services.MCP
 {
@@ -21,7 +22,7 @@ namespace AIAgentTest.Services.MCP
         /// <returns>The registered client</returns>
         public static IMCPServerClient RegisterHttpServer(string name, string url)
         {
-            var logger = ServiceProvider.GetService<IDebugLogger>();
+            var logger = ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IDebugLogger>();
             var mcpClientFactory = ServiceProvider.GetService<MCPClientFactory>();
             
             if (mcpClientFactory == null)
@@ -42,7 +43,7 @@ namespace AIAgentTest.Services.MCP
         /// <returns>The registered client</returns>
         public static IMCPServerClient RegisterSimplifiedMCPClient(string name, string url)
         {
-            var logger = ServiceProvider.GetService<IDebugLogger>();
+            var logger = ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IDebugLogger>();
             var mcpClientFactory = ServiceProvider.GetService<MCPClientFactory>();
             
             if (mcpClientFactory == null)
@@ -74,7 +75,7 @@ namespace AIAgentTest.Services.MCP
         /// <returns>The registered client</returns>
         public static IMCPServerClient RegisterStdioMCPClient(string name, string targetDirectory)
         {
-            var logger = ServiceProvider.GetService<IDebugLogger>();
+            var logger = ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IDebugLogger>();
             var mcpClientFactory = ServiceProvider.GetService<MCPClientFactory>();
             
             if (mcpClientFactory == null)
@@ -123,12 +124,12 @@ namespace AIAgentTest.Services.MCP
             if (debugViewModel != null)
             {
                 var debugLogger = new DebugLogger(debugViewModel);
-                ServiceProvider.RegisterService<IDebugLogger>(debugLogger);
+                ServiceProvider.RegisterService<AIAgentTest.Services.Interfaces.IDebugLogger>(debugLogger);
                 debugLogger.Log("Registering MCP services...");
             }
             
             // Get the debug logger
-            var logger = ServiceProvider.GetService<IDebugLogger>();
+            var logger = ServiceProvider.GetService<AIAgentTest.Services.Interfaces.IDebugLogger>();
             
             // Register the tool registry
             logger?.Log("Registering tool registry...");
@@ -223,7 +224,14 @@ namespace AIAgentTest.Services.MCP
                 }
                 
                 // Register tools from MCP servers without trying to start them yet
-                await MCPServerToolRegistration.RegisterServerToolsAsync(toolRegistry, mcpClientFactory, logger);
+                logger?.Log("About to register server tools...");
+                try {
+                    await MCPServerToolRegistration.RegisterServerToolsAsync(toolRegistry, mcpClientFactory, logger);
+                    logger?.Log("Server tool registration completed successfully.");
+                } catch (Exception toolEx) {
+                    logger?.Log($"Error during tool registration: {toolEx.Message}");
+                    logger?.Log($"Stack trace: {toolEx.StackTrace}");
+                }
             }
             catch (Exception ex)
             {

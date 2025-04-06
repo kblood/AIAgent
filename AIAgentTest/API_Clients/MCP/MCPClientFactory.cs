@@ -103,9 +103,61 @@ namespace AIAgentTest.API_Clients.MCP
         /// </summary>
         /// <param name="serverName">Name of the server</param>
         /// <param name="serverClient">Client for communicating with the server</param>
-        public void RegisterMCPServer(string serverName, IMCPServerClient serverClient)
+        /// <param name="loadToolsImmediately">Whether to attempt to load tools immediately</param>
+        public void RegisterMCPServer(string serverName, IMCPServerClient serverClient, bool loadToolsImmediately = true)
         {
+            // Store the client
             _serverClients[serverName] = serverClient;
+            
+            // Optionally initiate tool loading in the background
+            if (loadToolsImmediately)
+            {
+                // Fire and forget - we don't want to block the registration process
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Try to start the server and get tools
+                        var isAvailable = await serverClient.IsAvailableAsync();
+                        if (!isAvailable)
+                        {
+                            await serverClient.StartServerAsync();
+                        }
+                        
+                        // Get tools from the server
+                        var tools = await serverClient.GetToolsAsync();
+                        
+                        // Register tools if we have a registry
+                        if (_toolRegistry != null && tools != null && tools.Count > 0)
+                        {
+                            foreach (var tool in tools)
+                            {
+                                // Add server metadata if missing
+                                if (tool.Metadata == null)
+                                {
+                                    tool.Metadata = new Dictionary<string, object>();
+                                }
+                                
+                                if (!tool.Metadata.ContainsKey("server_name"))
+                                {
+                                    tool.Metadata["server_name"] = serverName;
+                                }
+                                
+                                // Register tool with handler that delegates to the server
+                                _toolRegistry.RegisterTool(tool, async (input) =>
+                                {
+                                    return await serverClient.ExecuteToolAsync(tool.Name, input);
+                                });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but don't fail - this is just preloading
+                        System.Diagnostics.Debug.WriteLine($"Error preloading tools for server '{serverName}': {ex.Message}");
+                    }
+                });
+            }
         }
 
         /// <summary>
