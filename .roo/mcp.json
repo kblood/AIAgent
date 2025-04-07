@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "FileServer": {
-      "command": "npx",
+      "command": "c:/Devstuff/node-v22.14.0-win-x64/npx",
+      "transport": "stdio",
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "--stdio",
-        "C:/"
+        "C:/LLM/Projects/ClaudeTest/AIAgent"
       ]
     }
   }
