@@ -205,17 +205,15 @@ namespace AIAgentTest.Services.MCP
             var tools = toolRegistry.GetAllTools();
             
             // Format the tools for display
-            var toolsList = tools.Select(t => new Dictionary<string, object>
+            var result = new
             {
-                ["name"] = t.Name,
-                ["description"] = t.Description,
-                ["tags"] = t.Tags,
-                ["schema"] = t.Schema
-            }).ToList();
-            
-            var result = new Dictionary<string, object>
-            {
-                ["tools"] = toolsList
+                tools = tools.Select(t => new
+                {
+                    name = t.Name,
+                    description = t.Description,
+                    tags = t.Tags,
+                    schema = t.Schema
+                }).ToList()
             };
             
             Console.WriteLine($"ListToolsHandler returning information about {tools.Count} tools");
@@ -234,12 +232,12 @@ namespace AIAgentTest.Services.MCP
             var now = DateTime.Now;
             var utcNow = DateTime.UtcNow;
             
-            var result = new Dictionary<string, object>
+            var result = new
             {
-                ["localDateTime"] = now.ToString("yyyy-MM-dd HH:mm:ss"),
-                ["utcDateTime"] = utcNow.ToString("yyyy-MM-dd HH:mm:ss"),
-                ["timeZone"] = TimeZoneInfo.Local.DisplayName,
-                ["unixTimestamp"] = DateTimeOffset.Now.ToUnixTimeSeconds()
+                localDateTime = now.ToString("yyyy-MM-dd HH:mm:ss"),
+                utcDateTime = utcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                timeZone = TimeZoneInfo.Local.DisplayName,
+                unixTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds()
             };
             
             Console.WriteLine($"GetDateTimeHandler returning: {JsonSerializer.Serialize(result)}");
@@ -393,13 +391,19 @@ namespace AIAgentTest.Services.MCP
                 {
                     if (result.error != null)
                     {
-                        var errorResult = new Dictionary<string, object> { ["path"] = result.path, ["error"] = result.error };
-                        results.Add(errorResult);
+                        results.Add(new Dictionary<string, object> 
+                        { 
+                            ["path"] = result.path, 
+                            ["error"] = result.error 
+                        });
                     }
                     else
                     {
-                        var contentResult = new Dictionary<string, object> { ["path"] = result.path, ["content"] = result.content };
-                        results.Add(contentResult);
+                        results.Add(new Dictionary<string, object> 
+                        { 
+                            ["path"] = result.path, 
+                            ["content"] = result.content 
+                        });
                     }
                 }
 
@@ -407,7 +411,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return new Dictionary<string, object> { ["error"] = $"Error processing file reading: {ex.Message}" };
+                return CreateErrorResponse($"Error processing file reading: {ex.Message}");
             }
         }
 
@@ -480,12 +484,12 @@ namespace AIAgentTest.Services.MCP
             
             if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
             {
-                return new Dictionary<string, object> { ["error"] = "Path parameter is required" };
+                return CreateErrorResponse("Path parameter is required");
             }
             
             if (!options.TryGetValue("content", out var contentObj) || contentObj == null)
             {
-                return new Dictionary<string, object> { ["error"] = "Content parameter is required" };
+                return CreateErrorResponse("Content parameter is required");
             }
             
             string path = pathObj.ToString();
@@ -493,7 +497,7 @@ namespace AIAgentTest.Services.MCP
             
             if (!IsPathAllowed(path))
             {
-                return new Dictionary<string, object> { ["error"] = $"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories." };
+                return CreateErrorResponse($"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories.");
             }
             
             try
@@ -503,7 +507,7 @@ namespace AIAgentTest.Services.MCP
                 {
                     if (!IsPathAllowed(directory))
                     {
-                        return new Dictionary<string, object> { ["error"] = $"Access to directory '{directory}' is not allowed" };
+                        return CreateErrorResponse($"Access to directory '{directory}' is not allowed");
                     }
                         
                     Directory.CreateDirectory(directory);
@@ -514,7 +518,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return new Dictionary<string, object> { ["error"] = $"Error writing file: {ex.Message}" };
+                return CreateErrorResponse($"Error writing file: {ex.Message}");
             }
         }
 
@@ -564,7 +568,7 @@ namespace AIAgentTest.Services.MCP
                         {
                             type = "boolean",
                             description = "Preview changes using git-style diff format",
-                            @default = false
+                            default = false
                         }
                     },
                     required = new[] { "path", "edits" },
@@ -595,19 +599,19 @@ namespace AIAgentTest.Services.MCP
                     JsonSerializer.Serialize(input), options);
 
                 if (inputParams == null)
-                    return new Dictionary<string, object> { ["error"] = "Invalid input parameters" };
+                    return CreateErrorResponse("Invalid input parameters");
 
                 if (string.IsNullOrEmpty(inputParams.Path))
-                    return new Dictionary<string, object> { ["error"] = "Path parameter is required" };
+                    return CreateErrorResponse("Path parameter is required");
 
                 if (inputParams.Edits == null || inputParams.Edits.Length == 0)
-                    return new Dictionary<string, object> { ["error"] = "Edits parameter is required and must not be empty" };
+                    return CreateErrorResponse("Edits parameter is required and must not be empty");
 
                 if (!IsPathAllowed(inputParams.Path))
-                    return new Dictionary<string, object> { ["error"] = $"Access to path '{inputParams.Path}' is not allowed. Use list_allowed_directories to see available directories." };
+                    return CreateErrorResponse($"Access to path '{inputParams.Path}' is not allowed. Use list_allowed_directories to see available directories.");
 
                 if (!File.Exists(inputParams.Path))
-                    return new Dictionary<string, object> { ["error"] = $"File not found: {inputParams.Path}" };
+                    return CreateErrorResponse($"File not found: {inputParams.Path}");
 
                 // Read the file content
                 string originalContent = await File.ReadAllTextAsync(inputParams.Path);
@@ -617,7 +621,7 @@ namespace AIAgentTest.Services.MCP
                 foreach (var edit in inputParams.Edits)
                 {
                     if (string.IsNullOrEmpty(edit.OldText))
-                        return new Dictionary<string, object> { ["error"] = "oldText cannot be empty" };
+                        return CreateErrorResponse("oldText cannot be empty");
 
                     modifiedContent = modifiedContent.Replace(edit.OldText, edit.NewText ?? "");
                 }
@@ -647,7 +651,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return new Dictionary<string, object> { ["error"] = $"Error editing file: {ex.Message}" };
+                return CreateErrorResponse($"Error editing file: {ex.Message}");
             }
         }
 
@@ -733,14 +737,14 @@ namespace AIAgentTest.Services.MCP
             
             if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Path parameter is required" });
+                return Task.FromResult<object>(CreateErrorResponse("Path parameter is required"));
             }
             
             string path = pathObj.ToString();
             
             if (!IsPathAllowed(path))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories." });
+                return Task.FromResult<object>(CreateErrorResponse($"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories."));
             }
             
             try
@@ -757,7 +761,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Error creating directory: {ex.Message}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Error creating directory: {ex.Message}"));
             }
         }
 
@@ -806,19 +810,19 @@ namespace AIAgentTest.Services.MCP
             
             if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Path parameter is required" });
+                return Task.FromResult<object>(CreateErrorResponse("Path parameter is required"));
             }
             
             string path = pathObj.ToString();
             
             if (!IsPathAllowed(path))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories." });
+                return Task.FromResult<object>(CreateErrorResponse($"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories."));
             }
             
             if (!Directory.Exists(path))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Directory not found: {path}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Directory not found: {path}"));
             }
             
             try
@@ -867,7 +871,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Error listing directory: {ex.Message}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Error listing directory: {ex.Message}"));
             }
         }
 
@@ -916,19 +920,19 @@ namespace AIAgentTest.Services.MCP
             
             if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Path parameter is required" });
+                return Task.FromResult<object>(CreateErrorResponse("Path parameter is required"));
             }
             
             string path = pathObj.ToString();
             
             if (!IsPathAllowed(path))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories." });
+                return Task.FromResult<object>(CreateErrorResponse($"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories."));
             }
             
             if (!Directory.Exists(path))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Directory not found: {path}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Directory not found: {path}"));
             }
             
             try
@@ -937,15 +941,15 @@ namespace AIAgentTest.Services.MCP
                 var options2 = new JsonSerializerOptions { WriteIndented = true };
                 var jsonTree = JsonSerializer.Serialize(tree, options2);
                 
-                return Task.FromResult<object>(new Dictionary<string, object>
-                {
+                return Task.FromResult<object>(new Dictionary<string, object> 
+                { 
                     ["tree"] = tree,
                     ["path"] = path
                 });
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Error building directory tree: {ex.Message}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Error building directory tree: {ex.Message}"));
             }
         }
 
@@ -1053,12 +1057,12 @@ namespace AIAgentTest.Services.MCP
             
             if (!options.TryGetValue("source", out var sourceObj) || sourceObj == null)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Source parameter is required" });
+                return Task.FromResult<object>(CreateErrorResponse("Source parameter is required"));
             }
             
             if (!options.TryGetValue("destination", out var destinationObj) || destinationObj == null)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Destination parameter is required" });
+                return Task.FromResult<object>(CreateErrorResponse("Destination parameter is required"));
             }
             
             string source = sourceObj.ToString();
@@ -1066,12 +1070,12 @@ namespace AIAgentTest.Services.MCP
             
             if (!IsPathAllowed(source))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to source path '{source}' is not allowed. Use list_allowed_directories to see available directories." });
+                return Task.FromResult<object>(CreateErrorResponse($"Access to source path '{source}' is not allowed. Use list_allowed_directories to see available directories."));
             }
             
             if (!IsPathAllowed(destination))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to destination path '{destination}' is not allowed. Use list_allowed_directories to see available directories." });
+                return Task.FromResult<object>(CreateErrorResponse($"Access to destination path '{destination}' is not allowed. Use list_allowed_directories to see available directories."));
             }
             
             // Check if source exists
@@ -1080,13 +1084,13 @@ namespace AIAgentTest.Services.MCP
             
             if (!isDirectory && !isFile)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Source not found: {source}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Source not found: {source}"));
             }
             
             // Check if destination already exists
             if (File.Exists(destination) || Directory.Exists(destination))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Destination already exists: {destination}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Destination already exists: {destination}"));
             }
             
             try
@@ -1116,7 +1120,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Error moving file: {ex.Message}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Error moving file: {ex.Message}"));
             }
         }
 
@@ -1152,7 +1156,7 @@ namespace AIAgentTest.Services.MCP
                                 type = "string"
                             },
                             description = "Patterns to exclude from results",
-                            @default = new string[0]
+                            default = new string[0]
                         }
                     },
                     required = new[] { "path", "pattern" },
@@ -1184,27 +1188,27 @@ namespace AIAgentTest.Services.MCP
 
                 if (inputParams == null)
                 {
-                    return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Invalid input parameters" });
+                    return Task.FromResult<object>(CreateErrorResponse("Invalid input parameters"));
                 }
 
                 if (string.IsNullOrEmpty(inputParams.Path))
                 {
-                    return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Path parameter is required" });
+                    return Task.FromResult<object>(CreateErrorResponse("Path parameter is required"));
                 }
 
                 if (string.IsNullOrEmpty(inputParams.Pattern))
                 {
-                    return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Pattern parameter is required" });
+                    return Task.FromResult<object>(CreateErrorResponse("Pattern parameter is required"));
                 }
 
                 if (!IsPathAllowed(inputParams.Path))
                 {
-                    return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to path '{inputParams.Path}' is not allowed. Use list_allowed_directories to see available directories." });
+                    return Task.FromResult<object>(CreateErrorResponse($"Access to path '{inputParams.Path}' is not allowed. Use list_allowed_directories to see available directories."));
                 }
 
                 if (!Directory.Exists(inputParams.Path))
                 {
-                    return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Directory not found: {inputParams.Path}" });
+                    return Task.FromResult<object>(CreateErrorResponse($"Directory not found: {inputParams.Path}"));
                 }
 
                 var excludePatterns = inputParams.ExcludePatterns ?? Array.Empty<string>();
@@ -1258,7 +1262,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Error searching files: {ex.Message}" });
+                return Task.FromResult<object>(CreateErrorResponse($"Error searching files: {ex.Message}"));
             }
         }
 
@@ -1333,14 +1337,14 @@ namespace AIAgentTest.Services.MCP
             
             if (!options.TryGetValue("path", out var pathObj) || pathObj == null)
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = "Path parameter is required" });
+                return Task.FromResult<object>(CreateErrorResponse("Path parameter is required"));
             }
             
             string path = pathObj.ToString();
             
             if (!IsPathAllowed(path))
             {
-                return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories." });
+                return Task.FromResult<object>(CreateErrorResponse($"Access to path '{path}' is not allowed. Use list_allowed_directories to see available directories."));
             }
             
             try
@@ -1350,7 +1354,7 @@ namespace AIAgentTest.Services.MCP
                 
                 if (!isDirectory && !isFile)
                 {
-                    return Task.FromResult<object>(new Dictionary<string, object> { ["error"] = $"Path not found: {path}" });
+                    return Task.FromResult<object>(CreateErrorResponse($"Path not found: {path}"));
                 }
                     
                 if (isDirectory)
@@ -1392,10 +1396,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object>
-                {
-                    ["error"] = $"Error getting file info: {ex.Message}"
-                });
+                return Task.FromResult<object>(CreateErrorResponse($"Error getting file info: {ex.Message}"));
             }
         }
 
@@ -1450,10 +1451,7 @@ namespace AIAgentTest.Services.MCP
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object>
-                {
-                    ["error"] = $"Error listing allowed directories: {ex.Message}"
-                });
+                return Task.FromResult<object>(CreateErrorResponse($"Error listing allowed directories: {ex.Message}"));
             }
         }
         

@@ -26,6 +26,22 @@ namespace AIAgentTest.Testing
             var dataFlowValid = await TestUtil.ValidateDataFlow();
             System.Diagnostics.Debug.WriteLine($"Data Flow Valid: {dataFlowValid}");
             
+            // Test 4: MCP Filesystem Tools (optional)
+            bool runMCPTests = false; // Set to true to run MCP tests
+            if (runMCPTests)
+            {
+                System.Diagnostics.Debug.WriteLine("Test 4: Testing MCP Filesystem Tools...");
+                try
+                {
+                    await TestUtil.RunMCPFilesystemToolsTest();
+                    System.Diagnostics.Debug.WriteLine("MCP Filesystem Tools Test: Complete");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"MCP Filesystem Tools Test Error: {ex.Message}");
+                }
+            }
+            
             // Overall result
             var overallValid = servicesValid && connectionsValid && dataFlowValid;
             System.Diagnostics.Debug.WriteLine($"MVVM Architecture Tests Result: {(overallValid ? "PASS" : "FAIL")}");

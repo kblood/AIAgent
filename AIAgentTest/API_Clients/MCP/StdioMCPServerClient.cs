@@ -553,7 +553,24 @@ namespace AIAgentTest.API_Clients.MCP
         /// </summary>
         public void StopServer()
         {
-            Task.Run(StopServerAsync).GetAwaiter().GetResult();
+            // Don't block - use fire-and-forget with logging
+            Task.Run(async () => {
+                try
+                {
+                    _logger?.Log("[Stdio] StopServer called, stopping server in background...");
+                    await StopServerAsync();
+                    _logger?.Log("[Stdio] StopServer completed successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Log($"[Stdio] Error in StopServer background task: {ex.Message}");
+                }
+            });
+            
+            // Set these immediately rather than waiting
+            _isStarted = false;
+            
+            _logger?.Log("[Stdio] StopServer has initiated server shutdown in background");
         }
         
         /// <summary>

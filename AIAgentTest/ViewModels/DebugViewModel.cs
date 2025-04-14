@@ -287,6 +287,15 @@ private void ShowTechnicalContext()
     }
     
     /// <summary>
+    /// Log a message to the debug panel
+    /// </summary>
+    /// <param name="message">Message to log</param>
+    public void Log(string message)
+    {
+        AddLogEntry(message);
+    }
+    
+    /// <summary>
     /// Clear all log entries
     /// </summary>
     public void ClearLog()

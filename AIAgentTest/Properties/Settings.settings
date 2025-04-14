@@ -44,5 +44,8 @@
     <Setting Name="PresencePenalty" Type="System.Double" Scope="User">
       <Value Profile="(Default)">0.0</Value>
     </Setting>
+    <Setting Name="AllowedDirectories" Type="System.String" Scope="User">
+      <Value Profile="(Default)"></Value>
+    </Setting>
   </Settings>
 </SettingsFile>

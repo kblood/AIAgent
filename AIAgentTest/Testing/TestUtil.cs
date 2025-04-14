@@ -6,6 +6,8 @@ using AIAgentTest.Services;
 using AIAgentTest.ViewModels;
 using AIAgentTest.Services.Interfaces;
 using AIAgentTest.Models;
+using AIAgentTest.Services.MCP;
+using AIAgentTest.Services.MCP.Tests;
 
 namespace AIAgentTest.Testing
 {
@@ -80,6 +82,15 @@ namespace AIAgentTest.Testing
                 Console.WriteLine($"Error validating ViewModel connections: {ex.Message}");
                 return false;
             }
+        }
+        
+        /// <summary>
+        /// Tests the MCP filesystem tools
+        /// </summary>
+        public static async Task RunMCPFilesystemToolsTest()
+        {
+            Console.WriteLine("Running MCP Filesystem Tools Test...");
+            await TestFilesystemTools.ExecuteTest();
         }
         
         /// <summary>

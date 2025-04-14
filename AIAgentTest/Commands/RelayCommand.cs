@@ -23,6 +23,14 @@ namespace AIAgentTest.Commands
         public bool CanExecute(object parameter) => _canExecute?.Invoke() ?? true;
 
         public void Execute(object parameter) => _execute();
+        
+        /// <summary>
+        /// Raises the CanExecuteChanged event
+        /// </summary>
+        public void RaiseCanExecuteChanged()
+        {
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     public class RelayCommand<T> : ICommand
@@ -45,5 +53,13 @@ namespace AIAgentTest.Commands
         public bool CanExecute(object parameter) => _canExecute?.Invoke((T)parameter) ?? true;
 
         public void Execute(object parameter) => _execute((T)parameter);
+        
+        /// <summary>
+        /// Raises the CanExecuteChanged event
+        /// </summary>
+        public void RaiseCanExecuteChanged()
+        {
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 }

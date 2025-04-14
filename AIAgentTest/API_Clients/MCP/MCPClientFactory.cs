@@ -92,9 +92,10 @@ namespace AIAgentTest.API_Clients.MCP
             {
                 return CreateMCPClient("ollama");
             }
-            
+
+            return CreateMCPClient("ollama");
             // Add other model detection as needed
-            
+
             throw new NotSupportedException($"Model {modelName} is not supported for MCP");
         }
         
@@ -142,12 +143,21 @@ namespace AIAgentTest.API_Clients.MCP
                     try
                     {
                         System.Diagnostics.Debug.WriteLine($"Stopping server '{serverName}'...");
-                        server.StopServer();
-                        System.Diagnostics.Debug.WriteLine($"Server '{serverName}' stopped successfully");
+                        // Start a background task for stopping the server
+                        Task.Run(() => {
+                            try {
+                                server.StopServer();
+                                System.Diagnostics.Debug.WriteLine($"Server '{serverName}' stopped successfully");
+                            } catch (Exception stopEx) {
+                                System.Diagnostics.Debug.WriteLine($"Error stopping server in background task: {stopEx.Message}");
+                            }
+                        });
+                        // Don't wait for the server to stop - proceed immediately
+                        System.Diagnostics.Debug.WriteLine($"Server '{serverName}' stop initiated in background");
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error stopping server '{serverName}': {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"Error initiating server '{serverName}' stop: {ex.Message}");
                         // Continue with removal even if stop fails
                     }
                     

@@ -1,0 +1,31 @@
+AIAgent Project Overview
+
+This project is a .NET application, likely a WPF app, structured with the MVVM (Model-View-ViewModel) design pattern.
+
+Root Directory:
+- AIAgentTest.sln: Visual Studio solution file.
+- ARCHITECTURE.md, README.md, LICENSE.txt: Documentation and license.
+- .git, .roo, .vs, .vscode: Version control and IDE configuration.
+- AIAgentTest/: Main application source code.
+
+Inside AIAgentTest/:
+- AIAgentTest.csproj: C# project file.
+- Program.cs: Application entry point.
+- App.xaml, App.xaml.cs: WPF application definition and startup logic.
+- README_MVVM.md: MVVM pattern documentation.
+
+Key Folders:
+- API_Clients/: Code for interacting with external APIs.
+- Commands/: Command pattern implementations for UI actions.
+- Common/: Shared utilities and helpers.
+- Models/: Data models representing business entities.
+- Services/: Business logic and service layer.
+- UI/: User interface components.
+- ViewModels/: ViewModel classes binding UI and data.
+- Views/: XAML views for the UI.
+- Resources/: Application resources (images, styles, etc.).
+- Tests/, Testing/: Unit and integration tests.
+- bin/, obj/: Build output directories.
+
+Summary:
+The AIAgent app is a modular, well-structured .NET application following MVVM architecture. It separates concerns across API clients, services, models, and UI layers, supporting maintainability and testability.

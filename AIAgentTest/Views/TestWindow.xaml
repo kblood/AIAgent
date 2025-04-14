@@ -41,6 +41,31 @@
                           IsCheckable="True"
                           IsChecked="{Binding IsModelSelectionVisible}"
                           Command="{Binding ToggleModelSelectionCommand}"/>
+                <MenuItem Header="Show _Filesystem Manager"
+                          IsCheckable="True"
+                          IsChecked="{Binding IsFilesystemManagerVisible}"
+                          Command="{Binding ToggleFilesystemManagerCommand}"
+                          Visibility="{Binding FilesystemManagerVM, Converter={StaticResource NullToVisibilityConverter}}"/>
+                <MenuItem Header="Show Tool _Testing"
+                          IsCheckable="True"
+                          IsChecked="{Binding IsToolTestingVisible}"
+                          Command="{Binding ToggleToolTestingCommand}"
+                          Visibility="{Binding ToolTestingVM, Converter={StaticResource NullToVisibilityConverter}}"/>
+                <MenuItem Header="Show _Tool Manager"
+                          IsCheckable="True"
+                          IsChecked="{Binding IsToolManagerVisible}"
+                          Command="{Binding ToggleToolManagerCommand}"
+                          Visibility="{Binding ToolManagerVM, Converter={StaticResource NullToVisibilityConverter}}"/>
+                <MenuItem Header="Show MCP _Server Manager"
+                          IsCheckable="True"
+                          IsChecked="{Binding IsMCPServerManagerVisible}"
+                          Command="{Binding ToggleMCPServerManagerCommand}"
+                          Visibility="{Binding MCPServerManagerVM, Converter={StaticResource NullToVisibilityConverter}}"/>
+                <MenuItem Header="Show _Settings"
+                          IsCheckable="True"
+                          IsChecked="{Binding IsSettingsVisible}"
+                          Command="{Binding ToggleSettingsCommand}"
+                          Visibility="{Binding SettingsVM, Converter={StaticResource NullToVisibilityConverter}}"/>
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Header="_About..." Command="{Binding ShowAboutCommand}"/>
@@ -106,6 +131,18 @@
             <TabItem Header="MCP Servers" 
                      Visibility="{Binding MCPServerManagerVM, Converter={StaticResource NullToVisibilityConverter}}">
                 <local:MCPServerManagerPanel DataContext="{Binding MCPServerManagerVM}" />
+            </TabItem>
+            
+            <!-- Filesystem Manager Tab -->
+            <TabItem Header="Filesystem Manager" 
+                     Visibility="{Binding FilesystemManagerVM, Converter={StaticResource NullToVisibilityConverter}}">
+                <local:FilesystemManagerPanel DataContext="{Binding FilesystemManagerVM}" />
+            </TabItem>
+            
+            <!-- Tool Testing Tab -->
+            <TabItem Header="Tool Testing"
+                     Visibility="{Binding ToolTestingVM, Converter={StaticResource NullToVisibilityConverter}}">
+                <local:ToolTestingPanel DataContext="{Binding ToolTestingVM}" />
             </TabItem>
             
             <!-- Settings Tab -->

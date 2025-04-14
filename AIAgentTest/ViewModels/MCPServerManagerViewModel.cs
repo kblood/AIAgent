@@ -536,12 +536,25 @@ namespace AIAgentTest.ViewModels
                     return;
                 }
                 
-                server.ServerClient.StopServer();
+                // Immediately update the UI
                 server.IsRunning = false;
                 server.IsConnected = false;
                 server.IsActive = false;
                 
-                Debug.WriteLine($"Stopped server: {server.Name}");
+                // Run the stop operation in the background
+                Task.Run(() => {
+                    try
+                    {
+                        server.ServerClient.StopServer();
+                        Debug.WriteLine($"Stopped server: {server.Name} in background task");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error stopping server in background task: {ex.Message}");
+                    }
+                });
+                
+                Debug.WriteLine($"Server {server.Name} stop operation initiated");
             }
             catch (Exception ex)
             {

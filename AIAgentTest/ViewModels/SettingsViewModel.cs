@@ -69,28 +69,26 @@ namespace AIAgentTest.ViewModels
         
         private void LoadSettings()
         {
-            // Temp default values until we load from settings
-            MaxTokens = 1024;
-            Temperature = 0.7;
-            UseContext = true;
-            EnableMCP = true;
-            HistoryDepth = 5;
+            // Load from settings
+            MaxTokens = Properties.Settings.Default.MaxResponseLength;
+            Temperature = Properties.Settings.Default.Temperature;
+            UseContext = Properties.Settings.Default.EnableContextSummarization;
+            EnableMCP = Properties.Settings.Default.EnableToolCalls;
+            HistoryDepth = Properties.Settings.Default.SummarizationThreshold;
         }
         
         private void SaveSettings()
         {
             // Apply settings to services
             _contextManager.IsContextEnabled = UseContext;
-            // History depth setting is stored but not applied to the interface
-            // since it's not available in the interface
             
             // Save to user settings
-            // Properties.Settings.Default.MaxTokens = MaxTokens;
-            // Properties.Settings.Default.Temperature = Temperature;
-            // Properties.Settings.Default.UseContext = UseContext;
-            // Properties.Settings.Default.EnableMCP = EnableMCP;
-            // Properties.Settings.Default.HistoryDepth = HistoryDepth;
-            // Properties.Settings.Default.Save();
+            Properties.Settings.Default.MaxResponseLength = MaxTokens;
+            Properties.Settings.Default.Temperature = Temperature;
+            Properties.Settings.Default.EnableContextSummarization = UseContext;
+            Properties.Settings.Default.EnableToolCalls = EnableMCP;
+            Properties.Settings.Default.SummarizationThreshold = HistoryDepth;
+            Properties.Settings.Default.Save();
             
             MessageBox.Show("Settings saved", "Settings", MessageBoxButton.OK, MessageBoxImage.Information);
         }

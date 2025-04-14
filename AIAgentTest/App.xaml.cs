@@ -138,6 +138,19 @@ namespace AIAgentTest
                     mcpContextManager);
                 ServiceProvider.RegisterService<SettingsViewModel>(settingsViewModel);
                 
+                // Create filesystem manager ViewModel
+                var commonTools = ServiceProvider.GetService<CommonTools>();
+                var filesystemManagerViewModel = new FilesystemManagerViewModel(
+                    commonTools,
+                    debugViewModel);
+                ServiceProvider.RegisterService<FilesystemManagerViewModel>(filesystemManagerViewModel);
+                
+                // Create tool testing ViewModel using the already retrieved IToolRegistry instance
+                var toolTestingViewModel = new ToolTestingViewModel(
+                    ServiceProvider.GetService<IToolRegistry>(),
+                    debugViewModel);
+                ServiceProvider.RegisterService<ToolTestingViewModel>(toolTestingViewModel);
+                
                 // Create main view model with MCP components
                 mainViewModel = new MainViewModel(
                     themeService,
@@ -147,7 +160,9 @@ namespace AIAgentTest
                     chatSessionViewModel,
                     toolManagerViewModel,
                     mcpServerManagerViewModel,
-                    settingsViewModel);
+                    settingsViewModel,
+                    filesystemManagerViewModel,
+                    toolTestingViewModel);
                 ServiceProvider.RegisterService<MainViewModel>(mainViewModel);
                 
                 // Now that all services are registered, create and show the main window
@@ -174,6 +189,43 @@ namespace AIAgentTest
 
         protected override void OnExit(ExitEventArgs e)
         {
+            try
+            {
+                // Clean up MCP servers first
+                var mcpClientFactory = ServiceProvider.GetService<MCPClientFactory>();
+                if (mcpClientFactory != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("Shutting down MCP servers...");
+                    
+                    // Get all server names
+                    var serverNames = mcpClientFactory.GetRegisteredServerNames();
+                    
+                    // Create a background task for each server
+                    foreach (var serverName in serverNames)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Initiating shutdown for MCP server '{serverName}'...");
+                        
+                        // Don't wait for completion - we can't block on exit
+                        Task.Run(() => {
+                            try
+                            {
+                                // Remove the server - this will also stop it
+                                mcpClientFactory.RemoveMCPServerAsync(serverName);
+                                System.Diagnostics.Debug.WriteLine($"Successfully initiated shutdown for MCP server '{serverName}'");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error shutting down MCP server '{serverName}': {ex.Message}");
+                            }
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error during MCP cleanup: {ex.Message}");
+            }
+            
             // Clean up services
             LLMClientFactory.ReleaseAllClients();
             ServiceProvider.ClearServices();

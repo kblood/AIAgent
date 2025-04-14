@@ -108,6 +108,15 @@ namespace AIAgentTest.ViewModels
         public Action<string> AppendImageAction { get; set; }
         public Action ClearConversationAction { get; set; }
         
+        /// <summary>
+        /// Append text to the conversation (async wrapper for AppendTextAction)
+        /// </summary>
+        public Task AppendTextAsync(string text)
+        {
+            AppendTextAction?.Invoke(text);
+            return Task.CompletedTask;
+        }
+        
         // Constructor for dependency injection
         public ChatSessionViewModel(
             IMCPLLMClientService llmClientService,

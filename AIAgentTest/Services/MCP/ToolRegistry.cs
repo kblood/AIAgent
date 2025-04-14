@@ -197,7 +197,18 @@ namespace AIAgentTest.Services.MCP
             var enabledToolsString = Properties.Settings.Default.EnabledTools;
             
             if (string.IsNullOrEmpty(enabledToolsString))
+            {
+                // By default, enable all tools if setting is empty
+                Properties.Settings.Default.EnabledTools = "*";
+                Properties.Settings.Default.Save();
                 return;
+            }
+            
+            if (enabledToolsString == "*")
+            {
+                // Special case - all tools enabled
+                return;
+            }
             
             var toolsList = enabledToolsString.Split(';', StringSplitOptions.RemoveEmptyEntries);
             
@@ -208,6 +219,9 @@ namespace AIAgentTest.Services.MCP
                 
                 _enabledTools.Add(tool);
             }
+            
+            // Debug log
+            System.Diagnostics.Debug.WriteLine($"Loaded {_enabledTools.Count} enabled tools from settings");
         }
         
         /// <summary>
@@ -216,6 +230,17 @@ namespace AIAgentTest.Services.MCP
         private void SaveEnabledTools()
         {
             var allTools = _tools.Keys.ToList();
+            
+            // Check if all tools are enabled
+            if (_enabledTools.Count == allTools.Count && allTools.All(t => _enabledTools.Contains(t)))
+            {
+                // All tools enabled - use special notation
+                Properties.Settings.Default.EnabledTools = "*";
+                Properties.Settings.Default.Save();
+                System.Diagnostics.Debug.WriteLine("Saved settings: All tools enabled");
+                return;
+            }
+            
             var enabledTools = new List<string>();
             var disabledTools = new List<string>();
             
@@ -229,6 +254,8 @@ namespace AIAgentTest.Services.MCP
             
             Properties.Settings.Default.EnabledTools = string.Join(";", enabledTools.Concat(disabledTools));
             Properties.Settings.Default.Save();
+            
+            System.Diagnostics.Debug.WriteLine($"Saved {enabledTools.Count} enabled tools and {disabledTools.Count} disabled tools to settings");
         }
         
         /// <summary>

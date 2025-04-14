@@ -4,6 +4,7 @@ using AIAgentTest.Services.Interfaces;
 using System.Threading.Tasks;
 using System;
 using System.IO;
+using System.Collections.Generic;
 using AIAgentTest.ViewModels;
 using IDebugLogger = AIAgentTest.Services.Interfaces.IDebugLogger;
 
@@ -96,14 +97,15 @@ namespace AIAgentTest.Services.MCP
                 logger?.Log($"Using temp directory instead: {targetDirectory}");
             }
 
-            // Create command and arguments with proper executable path
-            string command = "cmd.exe";
-            string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", targetDirectory };
-            //string[] args = new[] { "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "--stdio", targetDirectory };
-
-            // Completely skip stdio client due to stability issues
-            logger?.Log("Using SimplifiedMCPClient instead of StdioMCPServerClient due to stability issues");
-            return RegisterSimplifiedMCPClient(name, "http://localhost:3000");
+            // Use the FileSystemMCPServerClient instead of StdioMCPServerClient
+            logger?.Log("Using FileSystemMCPServerClient for filesystem access");
+            
+            string command = "npx";
+            string[] args = new[] { "-y", "@modelcontextprotocol/server-filesystem", targetDirectory };
+            
+            var client = new FileSystemMCPServerClient(command, args, "http://localhost:3000", logger);
+            mcpClientFactory.RegisterMCPServer(name, client);
+            return client;
         }
         
         /// <summary>
@@ -137,6 +139,13 @@ namespace AIAgentTest.Services.MCP
             var toolRegistry = new ToolRegistry();
             ServiceProvider.RegisterService<IToolRegistry>(toolRegistry);
             
+            // Register tool operation logger
+            logger?.Log("Registering tool operation logger...");
+            var toolOperationLogger = new ToolOperationLogger(
+                enableFileLogging: true,
+                debugViewModel: debugViewModel);
+            ServiceProvider.RegisterService<ToolOperationLogger>(toolOperationLogger);
+            
             // Register the MCP context manager
             logger?.Log("Registering MCP context manager...");
             var ollamaClient = (OllamaClient)LLMClientFactory.GetClient(LLMClientFactory.ProviderType.Ollama);
@@ -159,11 +168,38 @@ namespace AIAgentTest.Services.MCP
             // Register common tools
             logger?.Log("Registering common tools...");
             var commonTools = new CommonTools();
+            ConfigureAllowedDirectories(commonTools, logger);
             ServiceProvider.RegisterService<CommonTools>(commonTools);
 
             // Register tools with the registry
             logger?.Log("Registering tools with registry...");
             commonTools.RegisterCommonTools(toolRegistry);
+
+            // Ensure enabled tools setting is applied
+            var enabledToolsSetting = Properties.Settings.Default.EnabledTools;
+            logger?.Log($"Current enabled tools setting: {enabledToolsSetting}");
+            
+            // Check if EnabledTools setting exists and is empty, set default to enable all
+            if (string.IsNullOrEmpty(enabledToolsSetting))
+            {
+                logger?.Log("No enabled tools setting found, setting default to enable all (*)");
+                Properties.Settings.Default.EnabledTools = "*";
+                Properties.Settings.Default.Save();
+            }
+            
+            // If setting is "*", enable all tools
+            if (enabledToolsSetting == "*")
+            {
+                logger?.Log("Enabling all tools based on settings");
+                var allTools = toolRegistry.GetAllToolDefinitions();
+                foreach (var tool in allTools)
+                {
+                    logger?.Log($"Enabling tool: {tool.Name}");
+                    toolRegistry.EnableTool(tool.Name);
+                }
+            }
+            
+            logger?.Log("Filesystem tools registered and enabled successfully");
 
             // Register MCP servers and properly await
             logger?.Log("Registering MCP servers...");
@@ -202,9 +238,13 @@ namespace AIAgentTest.Services.MCP
                     string targetDir = Path.GetTempPath();
                     logger?.Log($"Using target directory: {targetDir}");
                     
-                    // Create and register the simplified client instead of stdio
-                    logger?.Log("Using SimplifiedMCPClient instead of StdioMCPServerClient due to potential stability issues");
-                    var mcpClient = new SimplifiedMCPClient("http://localhost:3000", logger);
+                    // Create and register our proper FileSystemMCPServerClient
+                    logger?.Log("Creating FileSystemMCPServerClient");
+                    var mcpClient = new FileSystemMCPServerClient(
+                        "npx",
+                        new[] { "-y", "@modelcontextprotocol/server-filesystem", targetDir },
+                        "http://localhost:3000",
+                        logger);
                     mcpClientFactory.RegisterMCPServer("FileServer", mcpClient);
                     logger?.Log("Adding FileServer to UI manually");
                     
@@ -240,5 +280,83 @@ namespace AIAgentTest.Services.MCP
                 logger?.Log($"Stack trace: {ex.StackTrace}");
             }
         }
+        
+        /// <summary>
+        /// Configure allowed directories for filesystem access
+        /// </summary>
+        /// <param name="commonTools">The CommonTools instance</param>
+        /// <param name="logger">Logger instance for diagnostics</param>
+        private static void ConfigureAllowedDirectories(CommonTools commonTools, IDebugLogger logger = null)
+    {
+        logger?.Log("Configuring allowed directories for filesystem access");
+        
+        try
+        {
+            // Add project directory
+            string projectDir = AppDomain.CurrentDomain.BaseDirectory;
+            logger?.Log($"Adding project directory: {projectDir}");
+            commonTools.AddAllowedDirectory(projectDir);
+            
+            // Add user documents folder
+            string documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            logger?.Log($"Adding documents folder: {documentsFolder}");
+            commonTools.AddAllowedDirectory(documentsFolder);
+            
+            // Add application data folder
+            string appDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
+                "AIAgent");
+            
+            // Create app data directory if it doesn't exist
+            if (!Directory.Exists(appDataFolder))
+            {
+                logger?.Log($"Creating application data folder: {appDataFolder}");
+                Directory.CreateDirectory(appDataFolder);
+            }
+            logger?.Log($"Adding application data folder: {appDataFolder}");
+            commonTools.AddAllowedDirectory(appDataFolder);
+            
+            // Add temp directory
+            string tempFolder = Path.GetTempPath();
+            logger?.Log($"Adding temp folder: {tempFolder}");
+            commonTools.AddAllowedDirectory(tempFolder);
+            
+            // Add custom directories from settings if they exist
+            try
+            {
+                // Check if there's a saved setting for allowed directories
+                string savedDirs = Properties.Settings.Default.AllowedDirectories;
+                if (!string.IsNullOrEmpty(savedDirs))
+                {
+                    logger?.Log("Found saved allowed directories in settings");
+                    string[] dirs = savedDirs.Split(';');
+                    foreach (var dir in dirs)
+                    {
+                        if (Directory.Exists(dir))
+                        {
+                            logger?.Log($"Adding custom directory from settings: {dir}");
+                            commonTools.AddAllowedDirectory(dir);
+                        }
+                        else
+                        {
+                            logger?.Log($"Skipping non-existent directory from settings: {dir}");
+                        }
+                    }
+                }
+                else
+                {
+                    logger?.Log("No custom directories found in settings");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.Log($"Error loading custom directories from settings: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.Log($"Error configuring allowed directories: {ex.Message}");
+        }
+    }
     }
 }
