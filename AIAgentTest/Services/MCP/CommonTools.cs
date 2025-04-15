@@ -933,14 +933,20 @@ namespace AIAgentTest.Services.MCP
             
             try
             {
-                var tree = BuildDirectoryTree(path);
-                var options2 = new JsonSerializerOptions { WriteIndented = true };
-                var jsonTree = JsonSerializer.Serialize(tree, options2);
+                var rootDir = new DirectoryInfo(path);
+                var directories = new List<Dictionary<string, object>>();
+                var files = new List<Dictionary<string, object>>();
                 
+                // Process the root directory first
+                var rootContents = GetFullDirectoryContents(rootDir, directories, files);
+                
+                // Return the properly structured result
                 return Task.FromResult<object>(new Dictionary<string, object>
                 {
-                    ["tree"] = tree,
-                    ["path"] = path
+                    ["directories"] = directories,
+                    ["files"] = files,
+                    ["path"] = path,
+                    ["count"] = directories.Count + files.Count
                 });
             }
             catch (Exception ex)
@@ -949,58 +955,82 @@ namespace AIAgentTest.Services.MCP
             }
         }
 
-        private object BuildDirectoryTree(string path)
+        private void GetFullDirectoryContents(DirectoryInfo directory, List<Dictionary<string, object>> directories, List<Dictionary<string, object>> files)
         {
-            var directoryInfo = new DirectoryInfo(path);
-            var directoryTreeDict = new Dictionary<string, object>
-            {
-                ["name"] = directoryInfo.Name,
-                ["type"] = "directory",
-                ["path"] = directoryInfo.FullName,
-                ["children"] = GetDirectoryContents(directoryInfo)
-            };
-            
-            return directoryTreeDict;
-        }
-
-        private object[] GetDirectoryContents(DirectoryInfo directory)
-        {
-            var result = new List<object>();
-            
             try
             {
-                // Add subdirectories
+                // Process directories
                 foreach (var subDir in directory.GetDirectories())
                 {
                     var dirDict = new Dictionary<string, object>
                     {
                         ["name"] = subDir.Name,
-                        ["type"] = "directory",
                         ["path"] = subDir.FullName,
-                        ["children"] = GetDirectoryContents(subDir)
+                        ["exists"] = true,
+                        ["contents"] = new Dictionary<string, object>
+                        {
+                            ["files"] = new List<Dictionary<string, object>>(),
+                            ["directories"] = new List<Dictionary<string, object>>()
+                        }
                     };
-                    result.Add(dirDict);
+                    
+                    directories.Add(dirDict);
+                    
+                    // Recursively process subdirectories
+                    var subDirContents = dirDict["contents"] as Dictionary<string, object>;
+                    var subDirs = subDirContents["directories"] as List<Dictionary<string, object>>;
+                    var subFiles = subDirContents["files"] as List<Dictionary<string, object>>;
+                    
+                    // Add subdirectory contents
+                    try
+                    {
+                        foreach (var nestedDir in subDir.GetDirectories())
+                        {
+                            var nestedDirDict = new Dictionary<string, object>
+                            {
+                                ["name"] = nestedDir.Name,
+                                ["path"] = nestedDir.FullName,
+                                ["exists"] = true
+                            };
+                            subDirs.Add(nestedDirDict);
+                        }
+                        
+                        // Add files in the subdirectory
+                        foreach (var file in subDir.GetFiles())
+                        {
+                            var fileDict = new Dictionary<string, object>
+                            {
+                                ["name"] = file.Name,
+                                ["path"] = file.FullName,
+                                ["size"] = file.Length,
+                                ["exists"] = true
+                            };
+                            subFiles.Add(fileDict);
+                        }
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        // Skip directories we can't access
+                    }
                 }
                 
-                // Add files
+                // Process files
                 foreach (var file in directory.GetFiles())
                 {
                     var fileDict = new Dictionary<string, object>
                     {
                         ["name"] = file.Name,
-                        ["type"] = "file",
                         ["path"] = file.FullName,
-                        ["size"] = file.Length
+                        ["size"] = file.Length,
+                        ["exists"] = true
                     };
-                    result.Add(fileDict);
+                    files.Add(fileDict);
                 }
             }
             catch (UnauthorizedAccessException)
             {
                 // Skip directories we can't access
             }
-            
-            return result.ToArray();
         }
 
         /// <summary>
@@ -1430,7 +1460,7 @@ namespace AIAgentTest.Services.MCP
         /// </summary>
         /// <param name="input">Tool input</param>
         /// <returns>Tool result</returns>
-        private Task<object> ListAllowedDirectoriesHandler(object input)
+        private async Task<object> ListAllowedDirectoriesHandler(object input)
         {
             try
             {
@@ -1446,14 +1476,14 @@ namespace AIAgentTest.Services.MCP
                     ["count"] = _allowedDirectories.Count
                 };
                 
-                return Task.FromResult<object>(resultDict);
+                return resultDict;
             }
             catch (Exception ex)
             {
-                return Task.FromResult<object>(new Dictionary<string, object>
+                return new Dictionary<string, object>
                 {
                     ["error"] = $"Error listing allowed directories: {ex.Message}"
-                });
+                };
             }
         }
         

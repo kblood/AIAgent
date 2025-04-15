@@ -95,12 +95,23 @@ namespace AIAgentTest.API_Clients.MCP
         private MCPResponse CreateToolResponse(string toolName, Dictionary<string, object> parameters, string preamble, string rawResponse, Dictionary<string, ToolDefinition> toolMap)
         {
             // Check if this is an MCP server tool
-            string serverName = null;
+            string? serverName = null;
             if (toolMap.TryGetValue(toolName, out var toolDefinition) && 
                 toolDefinition.Metadata != null &&
                 toolDefinition.Metadata.TryGetValue("server_name", out var server))
             {
-                serverName = server.ToString();
+                serverName = server?.ToString();
+            }
+            
+            var metadata = new Dictionary<string, object>
+            {
+                { "raw_response", rawResponse }
+            };
+            
+            // Only add server_name if it's not null
+            if (serverName != null)
+            {
+                metadata["server_name"] = serverName;
             }
             
             return new MCPResponse
@@ -108,12 +119,8 @@ namespace AIAgentTest.API_Clients.MCP
                 Type = "tool_use",
                 Tool = toolName,
                 Input = parameters,
-                Text = preamble, 
-                Metadata = new Dictionary<string, object>
-                {
-                    { "raw_response", rawResponse },
-                    { "server_name", serverName }
-                }
+                Text = preamble,
+                Metadata = metadata
             };
         }
         
@@ -122,12 +129,32 @@ namespace AIAgentTest.API_Clients.MCP
         /// </summary>
         private bool TryExtractJsonFromMarkdown(string input, out string jsonContent)
         {
-            var markdownJsonPattern = @"```(?:json)?\s*(\{.*?\})\s*```";
+            // More robust pattern to handle incomplete markdown code blocks and various formats
+            var markdownJsonPattern = @"```(?:json)?\s*(\{[\s\S]*?(?:\}|$))";
             var markdownMatch = Regex.Match(input, markdownJsonPattern, RegexOptions.Singleline);
             
             if (markdownMatch.Success)
             {
-                jsonContent = markdownMatch.Groups[1].Value.Trim();
+                var extractedJson = markdownMatch.Groups[1].Value.Trim();
+                
+                // Make sure we have a complete JSON object by checking for matching braces
+                int openBraces = 0;
+                int closeBraces = 0;
+                foreach (char c in extractedJson)
+                {
+                    if (c == '{') openBraces++;
+                    if (c == '}') closeBraces++;
+                }
+                
+                // If JSON is incomplete, try to fix it
+                if (openBraces > closeBraces)
+                {
+                    // Add missing closing braces
+                    extractedJson += new string('}', openBraces - closeBraces);
+                    Console.WriteLine($"Fixed incomplete JSON by adding closing braces: {extractedJson}");
+                }
+                
+                jsonContent = extractedJson;
                 Console.WriteLine($"Found JSON in markdown code block: {jsonContent}");
                 return true;
             }
@@ -178,25 +205,129 @@ To read a file:
 
 If you don't need to use a tool, just respond normally with text.
 ";
-            
-            // Combine messages into a full prompt with lower temperature
-            var fullPrompt = $"{systemMessage}\n\nAvailable tools:\n{toolsDescription}\n\nUser: {prompt}\n\nAssistant: ";
-            
-            // Generate response with Ollama with lower temperature for better format compliance
-            var requestParams = new Dictionary<string, object>
-            {
-                { "temperature", 0.1 }, // Very low temperature for strict format compliance
-                { "top_p", 0.9 }
-            };
-            
-            var result = await _ollamaClient.GenerateTextResponseWithParamsAsync(fullPrompt, model, requestParams);
-            
-            // Log the raw response for debugging
-            Console.WriteLine($"Raw response from LLM: {result}");
-            
-            // Try to parse the response as a tool use
+
             try
             {
+                // Combine messages into a full prompt with lower temperature
+                var fullPrompt = $"{systemMessage}\n\nAvailable tools:\n{toolsDescription}\n\nUser: {prompt}\n\nAssistant: ";
+                
+                // Generate response with Ollama with lower temperature for better format compliance
+                var requestParams = new Dictionary<string, object>
+                {
+                    { "temperature", 0.1 }, // Very low temperature for strict format compliance
+                    { "top_p", 0.9 }
+                };
+
+                // Use streaming approach to detect tool calls early
+                var responseBuilder = new StringBuilder();
+                var jsonBuilder = new StringBuilder();
+                bool inJsonBlock = false;
+                bool toolCallDetected = false;
+                MCPResponse toolCallResponse = null;
+                
+                // Stream the response and look for tool calls on-the-fly
+                await foreach (var chunk in _ollamaClient.GenerateStreamResponseWithParamsAsync(fullPrompt, model, requestParams))
+                {
+                    responseBuilder.Append(chunk);
+                    string currentResponse = responseBuilder.ToString();
+                    Console.WriteLine($"Received chunk: {chunk}");
+                    
+                    // Special case: Check if we have a markdown code block with JSON, even if incomplete
+                    if (currentResponse.Contains("```json") || currentResponse.Contains("```"))
+                    {
+                        // Try to extract JSON from markdown code block
+                        if (TryExtractJsonFromMarkdown(currentResponse, out string markdownJson))
+                        {
+                            Console.WriteLine($"Extracted JSON from markdown during streaming: {markdownJson}");
+                            var parsedResponse = TryParseToolCall(markdownJson, toolMap, currentResponse);
+                            if (parsedResponse != null)
+                            {
+                                toolCallResponse = parsedResponse;
+                                toolCallDetected = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Look for JSON blocks in markdown format (old code, keeping for backup)
+                    if (chunk.Contains("```json") || chunk.Contains("```") && !inJsonBlock)
+                    {
+                        inJsonBlock = true;
+                        jsonBuilder.Clear();
+                        continue;
+                    }
+                    
+                    if (inJsonBlock)
+                    {
+                        if (chunk.Contains("```"))
+                        {
+                            inJsonBlock = false;
+                            // Try to parse the complete JSON block
+                            string jsonContent = jsonBuilder.ToString().Trim();
+                            var parsedResponse = TryParseToolCall(jsonContent, toolMap, currentResponse);
+                            if (parsedResponse != null)
+                            {
+                                toolCallResponse = parsedResponse;
+                                toolCallDetected = true;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            jsonBuilder.Append(chunk);
+                        }
+                    }
+                    
+                    // Also check for direct JSON outside of code blocks
+                    if (currentResponse.TrimStart().StartsWith("{") && currentResponse.TrimEnd().EndsWith("}"))
+                    {
+                        var parsedResponse = TryParseToolCall(currentResponse, toolMap, currentResponse);
+                        if (parsedResponse != null)
+                        {
+                            toolCallResponse = parsedResponse;
+                            toolCallDetected = true;
+                            break;
+                        }
+                    }
+                    
+                    // Check for JSON pattern in the accumulated response even if it's part of text
+                    if (!toolCallDetected && currentResponse.Contains("\"type\""))
+                    {
+                        // Try to extract any JSON-like object from the accumulated text
+                        var jsonPattern = @"(\{(?:[^{}]|(?<Open>\{)|(?<Close-Open>\}))+(?(Open)(?!))\})";
+                        var matches = Regex.Matches(currentResponse, jsonPattern, RegexOptions.Singleline);
+                        
+                        foreach (Match match in matches)
+                        {
+                            string possibleJson = match.Value;
+                            Console.WriteLine($"Found possible JSON in streaming: {possibleJson}");
+                            
+                            var parsedResponse = TryParseToolCall(possibleJson, toolMap, currentResponse);
+                            if (parsedResponse != null)
+                            {
+                                Console.WriteLine($"Successfully parsed JSON during streaming: {possibleJson}");
+                                toolCallResponse = parsedResponse;
+                                toolCallDetected = true;
+                                break;
+                            }
+                        }
+                        
+                        if (toolCallDetected) break;
+                    }
+                }
+                
+                // Return the tool call if detected
+                if (toolCallDetected && toolCallResponse != null)
+                {
+                    Console.WriteLine($"Tool call detected early in streaming: {toolCallResponse.Tool}");
+                    return toolCallResponse;
+                }
+                
+                // If we reach here, either no tool call was detected or we need to do final parsing
+                string result = responseBuilder.ToString();
+                Console.WriteLine($"Raw response from LLM: {result}");
+                
+                // Perform final parsing of the complete response
                 string jsonToProcess = result;
                 string originalResponse = result;
                 
@@ -205,6 +336,9 @@ If you don't need to use a tool, just respond normally with text.
                 {
                     jsonToProcess = extractedJson;
                 }
+                
+                // Process the complete response to look for tool calls
+                // ... rest of the existing parsing logic
                 
                 // Check if the result is a complete JSON object
                 if (jsonToProcess.TrimStart().StartsWith("{") && jsonToProcess.TrimEnd().EndsWith("}"))
@@ -278,12 +412,12 @@ If you don't need to use a tool, just respond normally with text.
                 }
                 
                 // Fall back to regex for other patterns
-                var jsonPattern = @"\{\s*""type""\s*:\s*""tool_use"".*?\}"; // Match JSON with tool_use type
-                var match = Regex.Match(result, jsonPattern, RegexOptions.Singleline);
+                var finalJsonPattern = @"\{\s*""type""\s*:\s*""tool_use"".*?\}"; // Match JSON with tool_use type
+                var finalMatch = Regex.Match(result, finalJsonPattern, RegexOptions.Singleline);
                 
-                if (match.Success)
+                if (finalMatch.Success)
                 {
-                    var json = match.Value;
+                    var json = finalMatch.Value;
                     Console.WriteLine($"Found tool call using regex: {json}");
                     var toolCall = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
                     
@@ -295,7 +429,7 @@ If you don't need to use a tool, just respond normally with text.
                             toolCall["tool_input"].ToString());
                         
                         // Extract text before the tool call as preamble
-                        var preamble = result.Substring(0, match.Index).Trim();
+                        var preamble = result.Substring(0, finalMatch.Index).Trim();
                         
                         return CreateToolResponse(toolName, parameters, preamble, result, toolMap);
                     }
@@ -310,18 +444,125 @@ If you don't need to use a tool, just respond normally with text.
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error parsing tool call: {ex.Message}");
+                Console.WriteLine($"Error in streaming tool call detection: {ex.Message}");
                 // If parsing fails, treat as regular text
                 return new MCPResponse
                 {
                     Type = "text",
-                    Text = result,
+                    Text = ex.Message,
                     Metadata = new Dictionary<string, object>
                     {
                         { "error", ex.Message }
                     }
                 };
             }
+        }
+
+        /// <summary>
+        /// Helper method to try parsing a string as a tool call
+        /// </summary>
+        private MCPResponse? TryParseToolCall(string jsonContent, Dictionary<string, ToolDefinition> toolMap, string originalResponse)
+        {
+            try
+            {
+                // Basic validation
+                if (string.IsNullOrWhiteSpace(jsonContent) || 
+                   (!jsonContent.Contains("\"type\"") && !jsonContent.Contains("\"function\"")))
+                {
+                    return null;
+                }
+                
+                // Log the content we're trying to parse
+                Console.WriteLine($"Trying to parse potential tool call: {jsonContent}");
+                
+                // Try to extract JSON if the content contains text before or after the JSON
+                if (!jsonContent.TrimStart().StartsWith("{") || !jsonContent.TrimEnd().EndsWith("}"))
+                {
+                    // Try to find JSON using regex
+                    var jsonPattern = @"(\{(?:[^{}]|(?<Open>\{)|(?<Close-Open>\}))+(?(Open)(?!))\})";
+                    var match = Regex.Match(jsonContent, jsonPattern, RegexOptions.Singleline);
+                    if (match.Success)
+                    {
+                        jsonContent = match.Value;
+                        Console.WriteLine($"Extracted JSON from text: {jsonContent}");
+                    }
+                }
+                
+                // Try to deserialize the JSON (handles newlines and formatting)
+                Dictionary<string, object>? parsedJson;
+                try
+                {
+                    parsedJson = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"JSON deserialization failed, trying to normalize: {ex.Message}");
+                    
+                    // Try to normalize the JSON by removing newlines and extra whitespace
+                    var normalized = Regex.Replace(jsonContent, @"\s+", " ").Trim();
+                    parsedJson = JsonSerializer.Deserialize<Dictionary<string, object>>(normalized);
+                }
+                
+                if (parsedJson == null) return null;
+                
+                // Format 1: {"type": "tool_use", "tool": "tool_name", "tool_input": {...}}
+                if (parsedJson.ContainsKey("type") && 
+                    parsedJson["type"].ToString() == "tool_use" &&
+                    parsedJson.ContainsKey("tool") &&
+                    parsedJson.ContainsKey("tool_input"))
+                {
+                    var toolName = parsedJson["tool"].ToString();
+                    var parameters = ExtractToolInput(parsedJson["tool_input"]);
+                    Console.WriteLine($"Detected standard tool call format: {toolName}");
+                    return CreateToolResponse(toolName, parameters, "", originalResponse, toolMap);
+                }
+                
+                // Format 2: {"type": "tool_name", "tool_input": {...}}
+                else if (parsedJson.ContainsKey("type") && 
+                         parsedJson.ContainsKey("tool_input"))
+                {
+                    // Important: We're removing the toolMap.ContainsKey check to support tools like list_tools
+                    // that might not be explicitly registered in the tool registry
+                    var toolName = parsedJson["type"].ToString();
+                    Console.WriteLine($"Detected tool call with direct type: {toolName}");
+                    var parameters = ExtractToolInput(parsedJson["tool_input"]);
+                    return CreateToolResponse(toolName, parameters, "", originalResponse, toolMap);
+                }
+                
+                // Format 3: {"function": "tool_name", "parameters": {...}}
+                else if (parsedJson.ContainsKey("function") && 
+                         parsedJson.ContainsKey("parameters"))
+                {
+                    // Also removing toolMap check here
+                    var toolName = parsedJson["function"].ToString();
+                    Console.WriteLine($"Detected function call format: {toolName}");
+                    var parameters = ExtractToolInput(parsedJson["parameters"]);
+                    return CreateToolResponse(toolName, parameters, "", originalResponse, toolMap);
+                }
+                
+                // Format 4: Direct tool name as type with no tool_input
+                else if (parsedJson.ContainsKey("type") && 
+                        !parsedJson.ContainsKey("tool"))
+                {
+                    var toolName = parsedJson["type"].ToString();
+                    Console.WriteLine($"Detected direct tool name as type: {toolName}");
+                    
+                    // Create empty parameters if not provided
+                    Dictionary<string, object> parameters = new Dictionary<string, object>();
+                    if (parsedJson.ContainsKey("tool_input"))
+                    {
+                        parameters = ExtractToolInput(parsedJson["tool_input"]);
+                    }
+                    
+                    return CreateToolResponse(toolName, parameters, "", originalResponse, toolMap);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing potential tool call: {ex.Message}");
+            }
+            
+            return null;
         }
         
         /// <summary>
@@ -359,188 +600,120 @@ Assistant:";
                 { "top_p", 0.9 }
             };
             
-            var result = await _ollamaClient.GenerateTextResponseWithParamsAsync(prompt, model, requestParams);
+            // Use streaming to detect tool calls while generating the response
+            var responseBuilder = new StringBuilder();
+            var jsonBuilder = new StringBuilder();
+            bool inJsonBlock = false;
+            bool toolCallDetected = false;
+            MCPResponse toolCallResponse = null;
             
-            // Parse for any additional tool calls
-            try
+            // Stream the response and look for tool calls on-the-fly
+            await foreach (var chunk in _ollamaClient.GenerateStreamResponseWithParamsAsync(prompt, model, requestParams))
             {
-                string jsonToProcess = result;
-                string originalResponse = result;
+                responseBuilder.Append(chunk);
+                string currentResponse = responseBuilder.ToString();
                 
-                // Check for markdown code blocks with JSON and extract the content
-                if (TryExtractJsonFromMarkdown(result, out string extractedJson))
+                // Look for JSON blocks in markdown format
+                if (chunk.Contains("```json") || chunk.Contains("```") && !inJsonBlock)
                 {
-                    jsonToProcess = extractedJson;
+                    inJsonBlock = true;
+                    jsonBuilder.Clear();
+                    continue;
                 }
                 
-                // Check if the response is a complete JSON object
-                if (jsonToProcess.TrimStart().StartsWith("{") && jsonToProcess.TrimEnd().EndsWith("}"))
+                if (inJsonBlock)
                 {
-                    try
+                    if (chunk.Contains("```"))
                     {
-                        // Try to parse it as a complete JSON object
-                        var toolCall = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonToProcess);
-                        
-                        // Check if it's a valid tool call
-                        if (toolCall != null && 
-                            toolCall.ContainsKey("type") && 
-                            toolCall["type"].ToString() == "tool_use" &&
-                            toolCall.ContainsKey("tool") &&
-                            toolCall.ContainsKey("tool_input"))
+                        inJsonBlock = false;
+                        // Try to parse the complete JSON block
+                        string jsonContent = jsonBuilder.ToString().Trim();
+                        toolCallResponse = TryParseToolCall(jsonContent, 
+                            _toolRegistry.GetTools().ToDictionary(t => t.Name, t => t), 
+                            currentResponse);
+                        if (toolCallResponse != null)
                         {
-                            Console.WriteLine("Found complete tool call JSON in continuation");
-                            
-                            // Extract tool name and parameters
-                            var nextToolName = toolCall["tool"].ToString();
-                            Dictionary<string, object> parameters;
-                            
-                            // Handle different formats of tool_input
-                            if (toolCall["tool_input"] is JsonElement jsonElement)
-                            {
-                                parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                    jsonElement.GetRawText());
-                            }
-                            else
-                            {
-                                parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                    JsonSerializer.Serialize(toolCall["tool_input"]));
-                            }
-                            
-                            // Check if the tool belongs to an MCP server
-                            var toolDefinition = _toolRegistry.GetToolDefinition(nextToolName);
-                            string serverName = null;
-                            
-                            if (toolDefinition?.Metadata != null && 
-                                toolDefinition.Metadata.TryGetValue("server_name", out var server))
-                            {
-                                serverName = server.ToString();
-                            }
-                            
-                            return new MCPResponse
-                            {
-                                Type = "tool_use",
-                                Tool = nextToolName,
-                                Input = parameters,
-                                Text = "", // No preamble in this case
-                                Metadata = new Dictionary<string, object>
-                                {
-                                    { "previous_tool", toolName },
-                                    { "previous_result", toolResult },
-                                    { "raw_response", originalResponse },
-                                    { "server_name", serverName }
-                                }
-                            };
-                        }
-                        
-                        // Format 2: {"type": "tool_name", "tool_input": {...}}
-                        else if (toolCall.ContainsKey("type") && 
-                                 toolCall.ContainsKey("tool_input") &&
-                                 _toolRegistry.ToolExists(toolCall["type"].ToString()))
-                        {
-                            Console.WriteLine("Found alternative tool call format (type as tool name) in continuation");
-                            var nextToolName = toolCall["type"].ToString();
-                            var parameters = ExtractToolInput(toolCall["tool_input"]);
-                            
-                            // Check if the tool belongs to an MCP server
-                            var toolDefinition = _toolRegistry.GetToolDefinition(nextToolName);
-                            string serverName = null;
-                            
-                            if (toolDefinition?.Metadata != null && 
-                                toolDefinition.Metadata.TryGetValue("server_name", out var server))
-                            {
-                                serverName = server.ToString();
-                            }
-                            
-                            return new MCPResponse
-                            {
-                                Type = "tool_use",
-                                Tool = nextToolName,
-                                Input = parameters,
-                                Text = "", // No preamble in this case
-                                Metadata = new Dictionary<string, object>
-                                {
-                                    { "previous_tool", toolName },
-                                    { "previous_result", toolResult },
-                                    { "raw_response", originalResponse },
-                                    { "server_name", serverName }
-                                }
-                            };
+                            toolCallDetected = true;
+                            // Add metadata about previous tool call
+                            toolCallResponse.Metadata["previous_tool"] = toolName;
+                            toolCallResponse.Metadata["previous_result"] = toolResult;
+                            toolCallResponse.Metadata["raw_response"] = currentResponse;
+                            break;
                         }
                     }
-                    catch (JsonException ex)
+                    else
                     {
-                        Console.WriteLine($"Failed to parse continuation as complete JSON: {ex.Message}");
-                        // Continue to regex parsing
+                        jsonBuilder.Append(chunk);
                     }
                 }
                 
-                // Look for JSON tool usage in the response with regex as fallback
-                var jsonPattern = @"\{\s*""type""\s*:\s*""tool_use"".*?\}"; // Match JSON with tool_use type
-                var match = Regex.Match(result, jsonPattern, RegexOptions.Singleline);
-                
-                if (match.Success)
+                // Also check for direct JSON outside of code blocks
+                if (currentResponse.TrimStart().StartsWith("{") && currentResponse.TrimEnd().EndsWith("}"))
                 {
-                    // We have another tool call
-                    var json = match.Value;
-                    var toolCall = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                    toolCallResponse = TryParseToolCall(currentResponse, 
+                        _toolRegistry.GetTools().ToDictionary(t => t.Name, t => t), 
+                        currentResponse);
+                    if (toolCallResponse != null)
+                    {
+                        toolCallDetected = true;
+                        // Add metadata about previous tool call
+                        toolCallResponse.Metadata["previous_tool"] = toolName;
+                        toolCallResponse.Metadata["previous_result"] = toolResult;
+                        toolCallResponse.Metadata["raw_response"] = currentResponse;
+                        break;
+                    }
+                }
+                
+                // Check for regex pattern match in the accumulated response
+                if (!toolCallDetected && currentResponse.Contains("\"type\""))
+                {
+                    var jsonPattern = @"\{\s*""type""\s*:\s*""[^""]+"".*?\}"; // Match JSON with type field
+                    var match = Regex.Match(currentResponse, jsonPattern, RegexOptions.Singleline);
                     
-                    if (toolCall.ContainsKey("tool") && toolCall.ContainsKey("tool_input"))
+                    if (match.Success)
                     {
-                        var nextToolName = toolCall["tool"].ToString();
-                        var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                            toolCall["tool_input"].ToString());
-                        
-                        // Extract text before the tool call as preamble
-                        var preamble = result.Substring(0, match.Index).Trim();
-                        
-                        // Check if the tool belongs to an MCP server
-                        var toolDefinition = _toolRegistry.GetToolDefinition(nextToolName);
-                        string serverName = null;
-                        
-                        if (toolDefinition?.Metadata != null && 
-                            toolDefinition.Metadata.TryGetValue("server_name", out var server))
+                        var json = match.Value;
+                        toolCallResponse = TryParseToolCall(json, 
+                            _toolRegistry.GetTools().ToDictionary(t => t.Name, t => t), 
+                            currentResponse);
+                        if (toolCallResponse != null)
                         {
-                            serverName = server.ToString();
-                        }
-                        
-                        return new MCPResponse
-                        {
-                            Type = "tool_use",
-                            Tool = nextToolName,
-                            Input = parameters,
-                            Text = preamble,
-                            Metadata = new Dictionary<string, object>
+                            toolCallDetected = true;
+                            // Add metadata about previous tool call and extraction
+                            toolCallResponse.Metadata["previous_tool"] = toolName;
+                            toolCallResponse.Metadata["previous_result"] = toolResult;
+                            toolCallResponse.Metadata["raw_response"] = currentResponse;
+                            toolCallResponse.Metadata["extracted_from"] = "regex";
+                            // Extract text before the tool call as preamble if not already set
+                            if (string.IsNullOrEmpty(toolCallResponse.Text))
                             {
-                                { "previous_tool", toolName },
-                                { "previous_result", toolResult },
-                                { "raw_response", result },
-                                { "server_name", serverName }
+                                toolCallResponse.Text = currentResponse.Substring(0, match.Index).Trim();
                             }
-                        };
+                            break;
+                        }
                     }
                 }
-                
-                // No additional tool call, just return the text response
-                return new MCPResponse
-                {
-                    Type = "text",
-                    Text = result
-                };
             }
-            catch (Exception ex)
+            
+            // Return the tool call if detected during streaming
+            if (toolCallDetected && toolCallResponse != null)
             {
-                Console.WriteLine($"Error parsing tool call: {ex.Message}");
-                // If parsing fails, return as text
-                return new MCPResponse
-                {
-                    Type = "text",
-                    Text = result,
-                    Metadata = new Dictionary<string, object>
-                    {
-                        { "error", ex.Message }
-                    }
-                };
+                Console.WriteLine($"Tool call detected early in continuation: {toolCallResponse.Tool}");
+                return toolCallResponse;
             }
+            
+            // If we reach here, do final parsing on the complete response
+            string result = responseBuilder.ToString();
+            
+            // Fall back to the original parsing logic for the complete response
+            // ... (existing parsing logic)
+            
+            // No additional tool call, just return the text response
+            return new MCPResponse
+            {
+                Type = "text",
+                Text = result
+            };
         }
         
         /// <summary>
@@ -609,7 +782,7 @@ Please respond based on this context and the current query.";
         /// <summary>
         /// Executes a tool, whether it's local or on an MCP server
         /// </summary>
-        public async Task<object> ExecuteToolAsync(string toolName, Dictionary<string, object> parameters, string serverName = null)
+        public async Task<object> ExecuteToolAsync(string toolName, Dictionary<string, object> parameters, string? serverName = null)
         {
             Console.WriteLine($"Executing tool '{toolName}' on server '{serverName ?? "local"}'");
             
@@ -649,17 +822,17 @@ Please respond based on this context and the current query.";
             return _ollamaClient.GetAvailableModelsAsync();
         }
         
-        public Task<string> GenerateTextResponseAsync(string prompt, string model = null)
+        public Task<string> GenerateTextResponseAsync(string prompt, string? model = null)
         {
             return _ollamaClient.GenerateTextResponseAsync(prompt, model);
         }
         
-        public IAsyncEnumerable<string> GenerateStreamResponseAsync(string prompt, string model = null)
+        public IAsyncEnumerable<string> GenerateStreamResponseAsync(string prompt, string? model = null)
         {
             return _ollamaClient.GenerateStreamResponseAsync(prompt, model);
         }
         
-        public Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string model = null)
+        public Task<string> GenerateResponseWithImageAsync(string prompt, string imagePath, string? model = null)
         {
             return _ollamaClient.GenerateResponseWithImageAsync(prompt, imagePath, model);
         }

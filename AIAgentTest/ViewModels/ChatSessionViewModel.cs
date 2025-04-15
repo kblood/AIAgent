@@ -453,8 +453,14 @@ namespace AIAgentTest.ViewModels
             try
             {
                 // Generate response with the tool result
-                AppendTextAction?.Invoke($"{SelectedModel}: ");
+                // Add a newline if needed before adding assistant response
+                string currentText = CurrentSession?.Messages?.LastOrDefault()?.Content ?? "";
+                if (!currentText.EndsWith("\n"))
+                {
+                    AppendTextAction?.Invoke("\n");
+                }
                 
+                // Don't append the model name when responding to tool calls
                 var mcpResponse = await _llmClientService.ContinueWithToolResultAsync(
                     originalInput, toolName, result, SelectedModel);
                 
@@ -482,9 +488,14 @@ namespace AIAgentTest.ViewModels
                 // Get context with the error
                 var contextWithError = _contextManager.GetMCPContextualPrompt(originalInput);
                 
-                // Generate response acknowledging the error
-                AppendTextAction?.Invoke($"{SelectedModel}: ");
+                // Check if we need to add a newline
+                string currentText = CurrentSession?.Messages?.LastOrDefault()?.Content ?? "";
+                if (!currentText.EndsWith("\n"))
+                {
+                    AppendTextAction?.Invoke("\n");
+                }
                 
+                // Generate response acknowledging the error (without adding model name)
                 var response = await _llmClientService.GenerateTextResponseAsync(
                     $"{contextWithError}\n\nThe tool '{toolName}' encountered an error: {error}. Please acknowledge this error and suggest alternatives.",
                     SelectedModel);
