@@ -211,11 +211,16 @@ If you don't need to use a tool, just respond normally with text.
                 // Combine messages into a full prompt with lower temperature
                 var fullPrompt = $"{systemMessage}\n\nAvailable tools:\n{toolsDescription}\n\nUser: {prompt}\n\nAssistant: ";
                 
-                // Generate response with Ollama with lower temperature for better format compliance
+                // Use settings from the user preferences instead of hardcoded values
                 var requestParams = new Dictionary<string, object>
                 {
-                    { "temperature", 0.1 }, // Very low temperature for strict format compliance
-                    { "top_p", 0.9 }
+                    { "temperature", Properties.Settings.Default.Temperature },
+                    { "top_p", Properties.Settings.Default.TopP },
+                    { "frequency_penalty", Properties.Settings.Default.FrequencyPenalty },
+                    { "presence_penalty", Properties.Settings.Default.PresencePenalty },
+                    // Add max context length and max response length
+                    { "num_ctx", Properties.Settings.Default.MaxContextLength },
+                    { "num_predict", Properties.Settings.Default.MaxResponseLength }
                 };
 
                 // Use streaming approach to detect tool calls early
@@ -593,11 +598,16 @@ Do NOT repeat all the raw data from the tool result. Instead, present the inform
 User: {originalPrompt}
 Assistant:";
 
-            // Generate a follow-up response with lower temperature for consistent formatting
+            // Use settings from the user preferences instead of hardcoded values
             var requestParams = new Dictionary<string, object>
             {
-                { "temperature", 0.1 }, // Very low temperature for strict format compliance
-                { "top_p", 0.9 }
+                { "temperature", Properties.Settings.Default.Temperature },
+                { "top_p", Properties.Settings.Default.TopP },
+                { "frequency_penalty", Properties.Settings.Default.FrequencyPenalty },
+                { "presence_penalty", Properties.Settings.Default.PresencePenalty },
+                // Add max context length and max response length
+                { "num_ctx", Properties.Settings.Default.MaxContextLength },
+                { "num_predict", Properties.Settings.Default.MaxResponseLength }
             };
             
             // Use streaming to detect tool calls while generating the response
@@ -775,8 +785,18 @@ Current user query: {prompt}
 
 Please respond based on this context and the current query.";
 
-            // Generate response
-            return await _ollamaClient.GenerateTextResponseAsync(fullPrompt, model);
+            // Generate response with user settings
+            var requestParams = new Dictionary<string, object>
+            {
+                { "temperature", Properties.Settings.Default.Temperature },
+                { "top_p", Properties.Settings.Default.TopP },
+                { "frequency_penalty", Properties.Settings.Default.FrequencyPenalty },
+                { "presence_penalty", Properties.Settings.Default.PresencePenalty },
+                { "num_ctx", Properties.Settings.Default.MaxContextLength },
+                { "num_predict", Properties.Settings.Default.MaxResponseLength }
+            };
+            
+            return await _ollamaClient.GenerateTextResponseWithParamsAsync(fullPrompt, model, requestParams);
         }
         
         /// <summary>

@@ -938,7 +938,7 @@ namespace AIAgentTest.Services.MCP
                 var files = new List<Dictionary<string, object>>();
                 
                 // Process the root directory first
-                var rootContents = GetFullDirectoryContents(rootDir, directories, files);
+                GetFullDirectoryContents(rootDir, directories, files);
                 
                 // Return the properly structured result
                 return Task.FromResult<object>(new Dictionary<string, object>
